@@ -197,9 +197,13 @@ Deno.serve(async (req: Request) => {
     }
 
     if (cached) {
-      await supabase
-        .rpc("increment_search_count", { target_word: trimmedWord })
-        .catch(() => {});
+      try {
+        await supabase.rpc("increment_search_count", {
+          target_word: trimmedWord,
+        });
+      } catch {
+        // non-critical
+      }
 
       if (!isPremium) {
         await incrementUsage(supabase, userId, ip, today);
@@ -357,7 +361,7 @@ Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns,
       }
     }
 
-    await supabase
+    const { error: upsertErr } = await supabase
       .from("word_cache")
       .upsert(
         {
@@ -367,10 +371,11 @@ Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "word" },
-      )
-      .then(({ error: upsertErr }) => {
-        if (upsertErr) console.error("Cache upsert error:", upsertErr);
-      });
+      );
+
+    if (upsertErr) {
+      console.error("Cache upsert error:", upsertErr);
+    }
 
     if (!isPremium) {
       await incrementUsage(supabase, userId, ip, today);
