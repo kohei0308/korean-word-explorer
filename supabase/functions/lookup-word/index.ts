@@ -169,17 +169,24 @@ Deno.serve(async (req: Request) => {
     const ip = (typeof clientIp === "string" && clientIp) || "unknown";
     const today = new Date().toISOString().split("T")[0];
 
-    const FREE_LIMIT = 3;
+    const GUEST_LIMIT = 3;
+    const FREE_USER_LIMIT = 10;
     const disableLimit = Deno.env.get("DISABLE_USAGE_LIMIT") === "true";
+    const tier = isPremium ? "premium" : userId ? "free" : "guest";
+    const effectiveLimit = tier === "premium" ? Infinity : tier === "free" ? FREE_USER_LIMIT : GUEST_LIMIT;
 
-    if (!isPremium && !disableLimit) {
+    if (tier !== "premium" && !disableLimit) {
       const currentCount = await getUsageCount(supabase, userId, ip, today);
-      if (currentCount >= FREE_LIMIT) {
+      if (currentCount >= effectiveLimit) {
+        const errorMsg =
+          tier === "guest"
+            ? "本日の検索回数（3回）に達しました。ログインすると1日10回まで検索できます。"
+            : "本日の無料検索回数（10回）に達しました。有料プランで無制限に検索できます。";
         return jsonResponse(
           {
-            error:
-              "本日の無料検索回数（3回）に達しました。有料プランにアップグレードしてください。",
-            usage: { count: currentCount, limit: FREE_LIMIT },
+            error: errorMsg,
+            tier,
+            usage: { count: currentCount, limit: effectiveLimit },
           },
           429,
         );
@@ -205,18 +212,19 @@ Deno.serve(async (req: Request) => {
         // non-critical
       }
 
-      if (!isPremium) {
+      if (tier !== "premium") {
         await incrementUsage(supabase, userId, ip, today);
         const newCount = await getUsageCount(supabase, userId, ip, today);
         return jsonResponse({
           data: cached.result,
           cached: true,
           isPremium,
-          usage: { count: newCount, limit: FREE_LIMIT },
+          tier,
+          usage: { count: newCount, limit: effectiveLimit },
         });
       }
 
-      return jsonResponse({ data: cached.result, cached: true, isPremium });
+      return jsonResponse({ data: cached.result, cached: true, isPremium, tier });
     }
 
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -377,18 +385,19 @@ Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns,
       console.error("Cache upsert error:", upsertErr);
     }
 
-    if (!isPremium) {
+    if (tier !== "premium") {
       await incrementUsage(supabase, userId, ip, today);
       const newCount = await getUsageCount(supabase, userId, ip, today);
       return jsonResponse({
         data: parsed,
         cached: false,
         isPremium,
-        usage: { count: newCount, limit: FREE_LIMIT },
+        tier,
+        usage: { count: newCount, limit: effectiveLimit },
       });
     }
 
-    return jsonResponse({ data: parsed, cached: false, isPremium });
+    return jsonResponse({ data: parsed, cached: false, isPremium, tier });
   } catch (err) {
     console.error("Edge function unhandled error:", err);
     return jsonResponse(

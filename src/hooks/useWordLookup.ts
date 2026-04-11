@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { WordResult, LookupResponse } from '../types/word';
+import type { WordResult, LookupResponse, UserTier } from '../types/word';
 import { supabase } from '../lib/supabase';
 
 interface UsageInfo {
@@ -12,6 +12,7 @@ export function useWordLookup() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(false);
+  const [tier, setTier] = useState<UserTier>('guest');
   const [usage, setUsage] = useState<UsageInfo>({ count: 0, limit: 3 });
 
   const lookup = useCallback(async (word: string) => {
@@ -56,6 +57,9 @@ export function useWordLookup() {
       if (json.usage) {
         setUsage({ count: json.usage.count, limit: json.usage.limit });
       }
+      if (json.tier) {
+        setTier(json.tier);
+      }
 
       if (!response.ok || json.error) {
         if ((json as Record<string, unknown>).debug) {
@@ -81,5 +85,5 @@ export function useWordLookup() {
     setError(null);
   }, []);
 
-  return { result, loading, error, isPremium, usage, lookup, reset };
+  return { result, loading, error, isPremium, tier, usage, lookup, reset };
 }

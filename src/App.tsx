@@ -23,7 +23,7 @@ export default function App() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [page, setPage] = useState<Page>('home');
-  const { result, loading, error, isPremium, usage, lookup } = useWordLookup();
+  const { result, loading, error, isPremium, tier, usage, lookup } = useWordLookup();
   const { toast, showToast, hideToast } = useToast();
 
   const userId = session?.user?.id ?? null;
@@ -163,7 +163,7 @@ export default function App() {
             )}
 
             <div className="flex justify-center mt-4">
-              <UsageBadge count={usage.count} limit={usage.limit} isPremium={isPremium} />
+              <UsageBadge count={usage.count} limit={usage.limit} tier={tier} />
             </div>
 
             {loading && (
@@ -182,7 +182,15 @@ export default function App() {
             {error && (
               <div className="mt-8 max-w-md mx-auto bg-rose-50/80 border border-rose-200 rounded-2xl p-5 text-center">
                 <p className="text-rose-600 text-sm">{error}</p>
-                {error.includes('有料プラン') && (
+                {error.includes('ログインすると') && (
+                  <button
+                    onClick={() => setShowAuth(true)}
+                    className="mt-3 px-5 py-2 bg-gradient-to-r from-teal-400 to-cyan-400 text-white text-sm font-medium rounded-xl hover:from-teal-500 hover:to-cyan-500 transition-all"
+                  >
+                    ログインして10回まで検索
+                  </button>
+                )}
+                {error.includes('有料プランで無制限') && (
                   <button
                     onClick={() => setShowUpgrade(true)}
                     className="mt-3 px-5 py-2 bg-gradient-to-r from-amber-400 to-rose-400 text-white text-sm font-medium rounded-xl hover:from-amber-500 hover:to-rose-500 transition-all"

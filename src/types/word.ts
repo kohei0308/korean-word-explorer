@@ -49,10 +49,13 @@ export interface WordResult {
   related: RelatedWord[];
 }
 
+export type UserTier = 'guest' | 'free' | 'premium';
+
 export interface LookupResponse {
   data?: WordResult;
   error?: string;
   cached?: boolean;
   isPremium?: boolean;
+  tier?: UserTier;
   usage?: { count: number; limit: number };
 }
