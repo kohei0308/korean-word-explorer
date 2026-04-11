@@ -12,6 +12,7 @@ interface ResultTabsProps {
   result: WordResult;
   isPremium: boolean;
   onUpgradeClick: () => void;
+  onCopied?: () => void;
 }
 
 interface TabDef {
@@ -30,7 +31,7 @@ const tabs: TabDef[] = [
   { id: 'related', label: '関連語', icon: <Link2 className="w-4 h-4" />, premium: true },
 ];
 
-export default function ResultTabs({ result, isPremium, onUpgradeClick }: ResultTabsProps) {
+export default function ResultTabs({ result, isPremium, onUpgradeClick, onCopied }: ResultTabsProps) {
   const [activeTab, setActiveTab] = useState('basic');
 
   const handleTabClick = (tab: TabDef) => {
@@ -72,8 +73,8 @@ export default function ResultTabs({ result, isPremium, onUpgradeClick }: Result
       <div className="bg-stone-50/50 rounded-2xl p-5 border border-stone-100/80 min-h-[300px]">
         {activeTab === 'basic' && <BasicTab data={result.basic} />}
         {activeTab === 'conjugation' && <ConjugationTab data={result.conjugation} />}
-        {activeTab === 'grammar' && <GrammarTab data={result.grammar} />}
-        {activeTab === 'phrases' && <PhrasesTab data={result.phrases} />}
+        {activeTab === 'grammar' && <GrammarTab data={result.grammar} onCopied={onCopied} />}
+        {activeTab === 'phrases' && <PhrasesTab data={result.phrases} onCopied={onCopied} />}
         {activeTab === 'culture' && isPremium && <CultureTab data={result.culture} />}
         {activeTab === 'related' && isPremium && <RelatedTab data={result.related} />}
       </div>
