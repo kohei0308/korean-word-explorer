@@ -22,9 +22,15 @@ export function useWordLookup() {
     setResult(null);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      if (!supabaseUrl || !anonKey) {
+        setError('アプリの設定が不正です。管理者にお問い合わせください。');
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -32,13 +38,18 @@ export function useWordLookup() {
         'Authorization': `Bearer ${session?.access_token || anonKey}`,
       };
 
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lookup-word`;
+      const apiUrl = `${supabaseUrl}/functions/v1/lookup-word`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify({ word: word.trim(), clientIp: 'browser' }),
       });
+
+      if (!response.ok && response.headers.get('content-type')?.includes('text/html')) {
+        setError('サーバーへの接続に失敗しました。しばらくしてからお試しください。');
+        return;
+      }
 
       const json: LookupResponse = await response.json();
 

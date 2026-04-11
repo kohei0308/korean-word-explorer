@@ -96,7 +96,31 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { word, clientIp } = await req.json();
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+
+    if (!supabaseUrl || !supabaseServiceKey || !anonKey) {
+      console.error("Missing env vars:", {
+        hasUrl: !!supabaseUrl,
+        hasServiceKey: !!supabaseServiceKey,
+        hasAnonKey: !!anonKey,
+      });
+      return jsonResponse(
+        { error: "サーバー設定エラーが発生しました。" },
+        500,
+      );
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: "リクエストの形式が不正です。" }, 400);
+    }
+
+    const word = body.word;
+    const clientIp = body.clientIp;
 
     if (!word || typeof word !== "string" || word.trim().length === 0) {
       return jsonResponse({ error: "単語を入力してください" }, 400);
@@ -104,8 +128,6 @@ Deno.serve(async (req: Request) => {
 
     const trimmedWord = word.trim();
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const authHeader = req.headers.get("Authorization");
@@ -113,32 +135,38 @@ Deno.serve(async (req: Request) => {
     let isPremium = false;
 
     if (authHeader) {
-      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const userClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const {
-        data: { user },
-      } = await userClient.auth.getUser();
-      if (user) {
-        userId = user.id;
-        const { data: sub } = await supabase
-          .from("subscriptions")
-          .select("status, current_period_end")
-          .eq("user_id", userId)
-          .eq("status", "active")
-          .maybeSingle();
-        if (
-          sub &&
-          sub.current_period_end &&
-          new Date(sub.current_period_end) > new Date()
-        ) {
-          isPremium = true;
+      try {
+        const token = authHeader.replace("Bearer ", "");
+        if (token !== anonKey) {
+          const userClient = createClient(supabaseUrl, anonKey, {
+            global: { headers: { Authorization: authHeader } },
+          });
+          const {
+            data: { user },
+          } = await userClient.auth.getUser();
+          if (user) {
+            userId = user.id;
+            const { data: sub } = await supabase
+              .from("subscriptions")
+              .select("status, current_period_end")
+              .eq("user_id", userId)
+              .eq("status", "active")
+              .maybeSingle();
+            if (
+              sub &&
+              sub.current_period_end &&
+              new Date(sub.current_period_end) > new Date()
+            ) {
+              isPremium = true;
+            }
+          }
         }
+      } catch (authErr) {
+        console.error("Auth check failed (non-fatal):", authErr);
       }
     }
 
-    const ip = clientIp || "unknown";
+    const ip = (typeof clientIp === "string" && clientIp) || "unknown";
     const today = new Date().toISOString().split("T")[0];
 
     const FREE_LIMIT = 3;
@@ -148,17 +176,25 @@ Deno.serve(async (req: Request) => {
       const currentCount = await getUsageCount(supabase, userId, ip, today);
       if (currentCount >= FREE_LIMIT) {
         return jsonResponse(
-          { error: "本日の無料検索回数（3回）に達しました。有料プランにアップグレードしてください。", usage: { count: currentCount, limit: FREE_LIMIT } },
+          {
+            error:
+              "本日の無料検索回数（3回）に達しました。有料プランにアップグレードしてください。",
+            usage: { count: currentCount, limit: FREE_LIMIT },
+          },
           429,
         );
       }
     }
 
-    const { data: cached } = await supabase
+    const { data: cached, error: cacheErr } = await supabase
       .from("word_cache")
       .select("result")
       .eq("word", trimmedWord)
       .maybeSingle();
+
+    if (cacheErr) {
+      console.error("Cache lookup error:", cacheErr);
+    }
 
     if (cached) {
       await supabase
@@ -168,7 +204,12 @@ Deno.serve(async (req: Request) => {
       if (!isPremium) {
         await incrementUsage(supabase, userId, ip, today);
         const newCount = await getUsageCount(supabase, userId, ip, today);
-        return jsonResponse({ data: cached.result, cached: true, isPremium, usage: { count: newCount, limit: FREE_LIMIT } });
+        return jsonResponse({
+          data: cached.result,
+          cached: true,
+          isPremium,
+          usage: { count: newCount, limit: FREE_LIMIT },
+        });
       }
 
       return jsonResponse({ data: cached.result, cached: true, isPremium });
@@ -176,6 +217,7 @@ Deno.serve(async (req: Request) => {
 
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!anthropicKey) {
+      console.error("ANTHROPIC_API_KEY is not set");
       return jsonResponse(
         { error: "API設定エラー。管理者にお問い合わせください。" },
         500,
@@ -243,19 +285,36 @@ Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns,
       "anthropic-version": "2023-06-01",
     };
 
-    let response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: requestHeaders,
-      body: requestBody,
-    });
-
-    if (response.status === 529) {
-      await new Promise((r) => setTimeout(r, 2000));
+    let response: Response;
+    try {
       response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: requestHeaders,
         body: requestBody,
       });
+    } catch (fetchErr) {
+      console.error("Anthropic API fetch failed:", fetchErr);
+      return jsonResponse(
+        { error: "AI APIへの接続に失敗しました。" },
+        502,
+      );
+    }
+
+    if (response.status === 529) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: requestHeaders,
+          body: requestBody,
+        });
+      } catch (retryErr) {
+        console.error("Anthropic API retry failed:", retryErr);
+        return jsonResponse(
+          { error: "AI APIへの接続に失敗しました。" },
+          502,
+        );
+      }
     }
 
     if (!response.ok) {
@@ -266,11 +325,6 @@ Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns,
         {
           error:
             "AI応答エラーが発生しました。しばらくしてからお試しください。",
-          debug: {
-            status: response.status,
-            statusText: response.statusText,
-            body: errText,
-          },
         },
         502,
       );
@@ -285,9 +339,21 @@ Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns,
     } catch {
       const jsonMatch = textContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[0]);
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+        } catch {
+          console.error("JSON extraction parse failed:", jsonMatch[0]);
+          return jsonResponse(
+            { error: "AI応答の解析に失敗しました。" },
+            500,
+          );
+        }
       } else {
-        return jsonResponse({ error: "AI応答の解析に失敗しました。" }, 500);
+        console.error("No JSON found in AI response:", textContent);
+        return jsonResponse(
+          { error: "AI応答の解析に失敗しました。" },
+          500,
+        );
       }
     }
 
@@ -301,17 +367,28 @@ Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "word" },
-      );
+      )
+      .then(({ error: upsertErr }) => {
+        if (upsertErr) console.error("Cache upsert error:", upsertErr);
+      });
 
     if (!isPremium) {
       await incrementUsage(supabase, userId, ip, today);
       const newCount = await getUsageCount(supabase, userId, ip, today);
-      return jsonResponse({ data: parsed, cached: false, isPremium, usage: { count: newCount, limit: FREE_LIMIT } });
+      return jsonResponse({
+        data: parsed,
+        cached: false,
+        isPremium,
+        usage: { count: newCount, limit: FREE_LIMIT },
+      });
     }
 
     return jsonResponse({ data: parsed, cached: false, isPremium });
   } catch (err) {
-    console.error("Edge function error:", err);
-    return jsonResponse({ error: "サーバーエラーが発生しました。" }, 500);
+    console.error("Edge function unhandled error:", err);
+    return jsonResponse(
+      { error: "サーバーエラーが発生しました。しばらくしてからお試しください。" },
+      500,
+    );
   }
 });
