@@ -278,7 +278,7 @@ Deno.serve(async (req: Request) => {
 Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns, 4 phrases, and 5 related words.`;
 
     const requestBody = JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-20250414",
       max_tokens: 2000,
       messages: [{ role: "user", content: prompt }],
     });
