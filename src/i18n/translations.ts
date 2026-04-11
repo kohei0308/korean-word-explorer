@@ -75,6 +75,8 @@ const translations = {
     limitGuestError: '本日の検索回数（3回）に達しました。ログインすると1日10回まで検索できます。',
     limitFreeError: '本日の無料検索回数（10回）に達しました。有料プランで無制限に検索できます。',
     limitLoginButton: 'ログインして10回まで検索',
+    authGoogleButton: 'Googleでログイン',
+    authDivider: 'または',
     footer: 'Powered by AI -- Korean Word Explorer',
   },
   ko: {
@@ -151,6 +153,8 @@ const translations = {
     limitGuestError: '오늘의 검색 횟수(3회)에 도달했습니다. 로그인하면 하루 10회까지 검색할 수 있습니다.',
     limitFreeError: '오늘의 무료 검색 횟수(10회)에 도달했습니다. 유료 플랜으로 무제한 검색하세요.',
     limitLoginButton: '로그인하고 10회까지 검색',
+    authGoogleButton: 'Google로 로그인',
+    authDivider: '또는',
     footer: 'Powered by AI -- Korean Word Explorer',
   },
 } as const;

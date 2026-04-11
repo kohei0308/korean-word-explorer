@@ -39,6 +39,27 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
+      if (s?.user) {
+        (async () => {
+          const userLocale = navigator.language.startsWith('ko') ? 'ko' : 'ja';
+          let userCountry = '';
+          try {
+            const geo = await fetch('https://ipapi.co/json/');
+            if (geo.ok) {
+              const data = await geo.json();
+              userCountry = data.country_code || '';
+            }
+          } catch {
+            // non-critical
+          }
+          await supabase.from('user_profiles').upsert({
+            id: s.user.id,
+            user_locale: userLocale,
+            user_country: userCountry,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'id' });
+        })();
+      }
     });
 
     return () => subscription.unsubscribe();

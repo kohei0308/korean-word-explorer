@@ -1,6 +1,7 @@
 import { Sparkles } from 'lucide-react';
 import type { GrammarPattern } from '../../types/word';
 import CopyButton from '../CopyButton';
+import SpeakButton from '../SpeakButton';
 import { useLang } from '../../i18n/LanguageContext';
 
 interface GrammarTabProps {
@@ -9,7 +10,8 @@ interface GrammarTabProps {
 }
 
 export default function GrammarTab({ data, onCopied }: GrammarTabProps) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const speechLang = lang === 'ja' ? 'ko-KR' : 'ja-JP';
 
   return (
     <div className="space-y-4">
@@ -29,7 +31,10 @@ export default function GrammarTab({ data, onCopied }: GrammarTabProps) {
                 <p className="text-stone-800 text-sm font-medium">{item.example}</p>
                 <p className="text-stone-500 text-xs mt-1">{item.translation}</p>
               </div>
-              <CopyButton text={item.example} onCopied={onCopied} />
+              <div className="flex items-center gap-0.5 flex-shrink-0">
+                <SpeakButton text={item.example} speechLang={speechLang} />
+                <CopyButton text={item.example} onCopied={onCopied} />
+              </div>
             </div>
           </div>
         </div>

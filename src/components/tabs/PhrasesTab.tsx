@@ -1,6 +1,7 @@
 import { MessageCircle } from 'lucide-react';
 import type { Phrase } from '../../types/word';
 import CopyButton from '../CopyButton';
+import SpeakButton from '../SpeakButton';
 import { useLang } from '../../i18n/LanguageContext';
 
 interface PhrasesTabProps {
@@ -9,7 +10,8 @@ interface PhrasesTabProps {
 }
 
 export default function PhrasesTab({ data, onCopied }: PhrasesTabProps) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const speechLang = lang === 'ja' ? 'ko-KR' : 'ja-JP';
 
   return (
     <div className="space-y-3">
@@ -23,7 +25,10 @@ export default function PhrasesTab({ data, onCopied }: PhrasesTabProps) {
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
                 <p className="font-bold text-stone-800">{item.phrase}</p>
-                <CopyButton text={item.phrase} onCopied={onCopied} />
+                <div className="flex items-center gap-0.5 flex-shrink-0">
+                  <SpeakButton text={item.phrase} speechLang={speechLang} />
+                  <CopyButton text={item.phrase} onCopied={onCopied} />
+                </div>
               </div>
               <p className="text-sm text-stone-600 mt-0.5">{item.translation}</p>
               <p className="text-xs text-rose-400 mt-2 bg-rose-50 inline-block px-2 py-0.5 rounded-md">
