@@ -1,4 +1,5 @@
 import { Clock, X } from 'lucide-react';
+import { useLang } from '../i18n/LanguageContext';
 
 interface HistoryEntry {
   word: string;
@@ -12,6 +13,8 @@ interface SearchHistoryProps {
 }
 
 export default function SearchHistory({ history, onSelect, onClear }: SearchHistoryProps) {
+  const { t } = useLang();
+
   if (history.length === 0) return null;
 
   return (
@@ -19,14 +22,14 @@ export default function SearchHistory({ history, onSelect, onClear }: SearchHist
       <div className="flex items-center justify-between mb-2 px-1">
         <div className="flex items-center gap-1.5 text-stone-400">
           <Clock className="w-3.5 h-3.5" />
-          <span className="text-xs font-medium">検索履歴</span>
+          <span className="text-xs font-medium">{t('searchHistory')}</span>
         </div>
         <button
           onClick={onClear}
           className="flex items-center gap-1 text-xs text-stone-400 hover:text-stone-600 transition-colors"
         >
           <X className="w-3 h-3" />
-          クリア
+          {t('clearHistory')}
         </button>
       </div>
       <div className="flex flex-wrap gap-1.5">

@@ -1,6 +1,7 @@
 import { Sparkles } from 'lucide-react';
 import type { GrammarPattern } from '../../types/word';
 import CopyButton from '../CopyButton';
+import { useLang } from '../../i18n/LanguageContext';
 
 interface GrammarTabProps {
   data: GrammarPattern[];
@@ -8,9 +9,11 @@ interface GrammarTabProps {
 }
 
 export default function GrammarTab({ data, onCopied }: GrammarTabProps) {
+  const { t } = useLang();
+
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold text-stone-500">文法パターン</h3>
+      <h3 className="text-sm font-semibold text-stone-500">{t('grammarTitle')}</h3>
       {data.map((item, i) => (
         <div key={i} className="bg-white/70 rounded-xl p-4 border border-stone-100 space-y-3">
           <div className="flex items-start gap-2">

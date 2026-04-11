@@ -1,11 +1,14 @@
 import { BookOpen, Volume2, GraduationCap, Tag } from 'lucide-react';
 import type { BasicInfo } from '../../types/word';
+import { useLang } from '../../i18n/LanguageContext';
 
 interface BasicTabProps {
   data: BasicInfo;
 }
 
 export default function BasicTab({ data }: BasicTabProps) {
+  const { t } = useLang();
+
   return (
     <div className="space-y-4">
       <div className="text-center py-4">
@@ -16,23 +19,23 @@ export default function BasicTab({ data }: BasicTabProps) {
       <div className="grid grid-cols-2 gap-3">
         <InfoCard
           icon={<Volume2 className="w-4 h-4 text-teal-500" />}
-          label="発音"
+          label={t('basicPronunciation')}
           value={data.pronunciation}
           sub={data.romanization}
         />
         <InfoCard
           icon={<Tag className="w-4 h-4 text-amber-500" />}
-          label="品詞"
+          label={t('basicPartOfSpeech')}
           value={data.partOfSpeech}
         />
         <InfoCard
           icon={<GraduationCap className="w-4 h-4 text-rose-400" />}
-          label="レベル"
+          label={t('basicLevel')}
           value={`TOPIK ${data.level}`}
         />
         <InfoCard
           icon={<BookOpen className="w-4 h-4 text-sky-500" />}
-          label="単語"
+          label={t('basicWord')}
           value={data.word}
         />
       </div>

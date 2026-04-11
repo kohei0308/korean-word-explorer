@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { WordResult, LookupResponse, UserTier } from '../types/word';
+import type { Lang } from '../i18n/translations';
 import { supabase } from '../lib/supabase';
 
 interface UsageInfo {
@@ -15,7 +16,7 @@ export function useWordLookup() {
   const [tier, setTier] = useState<UserTier>('guest');
   const [usage, setUsage] = useState<UsageInfo>({ count: 0, limit: 3 });
 
-  const lookup = useCallback(async (word: string) => {
+  const lookup = useCallback(async (word: string, lang: Lang = 'ja') => {
     if (!word.trim()) return;
 
     setLoading(true);
@@ -44,7 +45,7 @@ export function useWordLookup() {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ word: word.trim(), clientIp: 'browser' }),
+        body: JSON.stringify({ word: word.trim(), lang, clientIp: 'browser' }),
       });
 
       if (!response.ok && response.headers.get('content-type')?.includes('text/html')) {

@@ -1,5 +1,6 @@
 import { ArrowRight } from 'lucide-react';
 import type { RelatedWord } from '../../types/word';
+import { useLang } from '../../i18n/LanguageContext';
 
 interface RelatedTabProps {
   data: RelatedWord[];
@@ -9,12 +10,17 @@ const relationColors: Record<string, string> = {
   '類義語': 'bg-teal-50 text-teal-600',
   '対義語': 'bg-rose-50 text-rose-500',
   '関連語': 'bg-amber-50 text-amber-600',
+  '유의어': 'bg-teal-50 text-teal-600',
+  '반의어': 'bg-rose-50 text-rose-500',
+  '관련어': 'bg-amber-50 text-amber-600',
 };
 
 export default function RelatedTab({ data }: RelatedTabProps) {
+  const { t } = useLang();
+
   return (
     <div className="space-y-2.5">
-      <h3 className="text-sm font-semibold text-stone-500 mb-3">関連語</h3>
+      <h3 className="text-sm font-semibold text-stone-500 mb-3">{t('relatedTitle')}</h3>
       {data.map((item, i) => (
         <div key={i} className="flex items-center gap-3 bg-white/70 rounded-xl p-3.5 border border-stone-100 group">
           <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${relationColors[item.relation] || 'bg-stone-50 text-stone-500'}`}>

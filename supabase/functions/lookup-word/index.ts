@@ -90,6 +90,108 @@ async function getUsageCount(
   }
 }
 
+function buildPrompt(trimmedWord: string, lang: string): string {
+  if (lang === "ko") {
+    return `You are a Japanese language expert helping Korean learners. Given the Japanese word "${trimmedWord}", return a JSON object with these exact keys (all text in Korean except Japanese examples):
+
+{
+  "basic": {
+    "word": "${trimmedWord}",
+    "meaning": "한국어 뜻 (여러 개면 쉼표로 구분)",
+    "pronunciation": "가타카나 읽기",
+    "romanization": "로마자 표기",
+    "partOfSpeech": "품사 (명사/동사/형용사/부사/etc)",
+    "level": "JLPT 급수 (N1-N5, 추정)"
+  },
+  "conjugation": {
+    "haeyoForm": "ます형",
+    "habnidaForm": "사전형 (기본형)",
+    "panmalForm": "て형",
+    "negativeHaeyo": "부정형 (ません)",
+    "negativeHabnida": "부정형 (ない)",
+    "pastHaeyo": "과거형 (ました)",
+    "pastHabnida": "과거형 (た)"
+  },
+  "grammar": [
+    {
+      "pattern": "문법 패턴 (일본어)",
+      "explanation": "패턴 설명 (한국어)",
+      "example": "일본어 예문",
+      "translation": "한국어 번역"
+    }
+  ],
+  "phrases": [
+    {
+      "phrase": "실전 프레이즈 (일본어)",
+      "translation": "한국어 번역",
+      "scene": "사용 장면 설명"
+    }
+  ],
+  "culture": {
+    "note": "이 단어와 관련된 일본 문화·뉘앙스 설명 (한국어로 200자 정도)"
+  },
+  "related": [
+    {
+      "word": "관련 일본어 단어",
+      "meaning": "한국어 뜻",
+      "relation": "관계 (유의어/반의어/관련어)"
+    }
+  ]
+}
+
+Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns, 4 phrases, and 5 related words.`;
+  }
+
+  return `You are a Korean language expert helping Japanese learners. Given the Korean word "${trimmedWord}", return a JSON object with these exact keys (all text in Japanese except Korean examples):
+
+{
+  "basic": {
+    "word": "${trimmedWord}",
+    "meaning": "日本語の意味（複数あればカンマ区切り）",
+    "pronunciation": "カタカナ読み",
+    "romanization": "ローマ字表記",
+    "partOfSpeech": "品詞（名詞/動詞/形容詞/副詞/etc）",
+    "level": "TOPIK級（1-6、推定）"
+  },
+  "conjugation": {
+    "haeyoForm": "해요体",
+    "habnidaForm": "합니다体",
+    "panmalForm": "パンマル（반말）",
+    "negativeHaeyo": "否定形（해요体）",
+    "negativeHabnida": "否定形（합니다体）",
+    "pastHaeyo": "過去形（해요体）",
+    "pastHabnida": "過去形（합니다体）"
+  },
+  "grammar": [
+    {
+      "pattern": "文法パターン（韓国語）",
+      "explanation": "パターンの説明（日本語）",
+      "example": "韓国語の例文",
+      "translation": "日本語訳"
+    }
+  ],
+  "phrases": [
+    {
+      "phrase": "実践フレーズ（韓国語）",
+      "translation": "日本語訳",
+      "scene": "使う場面の説明"
+    }
+  ],
+  "culture": {
+    "note": "この単語に関連する韓国文化・ニュアンスの説明（日本語で200文字程度）"
+  },
+  "related": [
+    {
+      "word": "関連する韓国語単語",
+      "meaning": "日本語の意味",
+      "relation": "関係性（類義語/対義語/関連語）"
+    }
+  ]
+}
+
+Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns, 4 phrases, and 5 related words.`;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -121,6 +223,7 @@ Deno.serve(async (req: Request) => {
 
     const word = body.word;
     const clientIp = body.clientIp;
+    const lang = body.lang === "ko" ? "ko" : "ja";
 
     if (!word || typeof word !== "string" || word.trim().length === 0) {
       return jsonResponse({ error: "単語を入力してください" }, 400);
@@ -180,8 +283,12 @@ Deno.serve(async (req: Request) => {
       if (currentCount >= effectiveLimit) {
         const errorMsg =
           tier === "guest"
-            ? "本日の検索回数（3回）に達しました。ログインすると1日10回まで検索できます。"
-            : "本日の無料検索回数（10回）に達しました。有料プランで無制限に検索できます。";
+            ? lang === "ko"
+              ? "오늘의 검색 횟수(3회)에 도달했습니다. 로그인하면 하루 10회까지 검색할 수 있습니다."
+              : "本日の検索回数（3回）に達しました。ログインすると1日10回まで検索できます。"
+            : lang === "ko"
+              ? "오늘의 무료 검색 횟수(10회)에 도달했습니다. 유료 플랜으로 무제한 검색하세요."
+              : "本日の無料検索回数（10回）に達しました。有料プランで無制限に検索できます。";
         return jsonResponse(
           {
             error: errorMsg,
@@ -197,6 +304,7 @@ Deno.serve(async (req: Request) => {
       .from("word_cache")
       .select("result")
       .eq("word", trimmedWord)
+      .eq("lang", lang)
       .maybeSingle();
 
     if (cacheErr) {
@@ -236,54 +344,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const prompt = `You are a Korean language expert helping Japanese learners. Given the Korean word "${trimmedWord}", return a JSON object with these exact keys (all text in Japanese except Korean examples):
-
-{
-  "basic": {
-    "word": "${trimmedWord}",
-    "meaning": "日本語の意味（複数あればカンマ区切り）",
-    "pronunciation": "カタカナ読み",
-    "romanization": "ローマ字表記",
-    "partOfSpeech": "品詞（名詞/動詞/形容詞/副詞/etc）",
-    "level": "TOPIK級（1-6、推定）"
-  },
-  "conjugation": {
-    "haeyoForm": "해요体",
-    "habnidaForm": "합니다体",
-    "panmalForm": "パンマル（반말）",
-    "negativeHaeyo": "否定形（해요体）",
-    "negativeHabnida": "否定形（합니다体）",
-    "pastHaeyo": "過去形（해요体）",
-    "pastHabnida": "過去形（합니다体）"
-  },
-  "grammar": [
-    {
-      "pattern": "文法パターン（韓国語）",
-      "explanation": "パターンの説明（日本語）",
-      "example": "韓国語の例文",
-      "translation": "日本語訳"
-    }
-  ],
-  "phrases": [
-    {
-      "phrase": "実践フレーズ（韓国語）",
-      "translation": "日本語訳",
-      "scene": "使う場面の説明"
-    }
-  ],
-  "culture": {
-    "note": "この単語に関連する韓国文化・ニュアンスの説明（日本語で200文字程度）"
-  },
-  "related": [
-    {
-      "word": "関連する韓国語単語",
-      "meaning": "日本語の意味",
-      "relation": "関係性（類義語/対義語/関連語）"
-    }
-  ]
-}
-
-Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns, 4 phrases, and 5 related words.`;
+    const prompt = buildPrompt(trimmedWord, lang);
 
     const requestBody = JSON.stringify({
       model: "claude-haiku-4-20250414",
@@ -374,11 +435,12 @@ Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns,
       .upsert(
         {
           word: trimmedWord,
+          lang,
           result: parsed,
           search_count: 1,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "word" },
+        { onConflict: "word,lang" },
       );
 
     if (upsertErr) {

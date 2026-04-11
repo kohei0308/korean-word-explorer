@@ -1,6 +1,7 @@
 import { MessageCircle } from 'lucide-react';
 import type { Phrase } from '../../types/word';
 import CopyButton from '../CopyButton';
+import { useLang } from '../../i18n/LanguageContext';
 
 interface PhrasesTabProps {
   data: Phrase[];
@@ -8,9 +9,11 @@ interface PhrasesTabProps {
 }
 
 export default function PhrasesTab({ data, onCopied }: PhrasesTabProps) {
+  const { t } = useLang();
+
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-stone-500">実践フレーズ</h3>
+      <h3 className="text-sm font-semibold text-stone-500">{t('phrasesTitle')}</h3>
       {data.map((item, i) => (
         <div key={i} className="bg-white/70 rounded-xl p-4 border border-stone-100">
           <div className="flex items-start gap-3">

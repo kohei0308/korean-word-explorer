@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { BookOpen, Table2, Sparkles, MessageCircle, Mic, Link2, Lock } from 'lucide-react';
 import type { WordResult } from '../types/word';
+import type { TranslationKey } from '../i18n/translations';
+import { useLang } from '../i18n/LanguageContext';
 import BasicTab from './tabs/BasicTab';
 import ConjugationTab from './tabs/ConjugationTab';
 import GrammarTab from './tabs/GrammarTab';
@@ -17,22 +19,23 @@ interface ResultTabsProps {
 
 interface TabDef {
   id: string;
-  label: string;
+  labelKey: TranslationKey;
   icon: React.ReactNode;
   premium: boolean;
 }
 
-const tabs: TabDef[] = [
-  { id: 'basic', label: '基本', icon: <BookOpen className="w-4 h-4" />, premium: false },
-  { id: 'conjugation', label: '活用', icon: <Table2 className="w-4 h-4" />, premium: false },
-  { id: 'grammar', label: '文法', icon: <Sparkles className="w-4 h-4" />, premium: false },
-  { id: 'phrases', label: 'フレーズ', icon: <MessageCircle className="w-4 h-4" />, premium: false },
-  { id: 'culture', label: 'ネイティブの声', icon: <Mic className="w-4 h-4" />, premium: true },
-  { id: 'related', label: '関連語', icon: <Link2 className="w-4 h-4" />, premium: true },
+const tabDefs: TabDef[] = [
+  { id: 'basic', labelKey: 'tabBasic', icon: <BookOpen className="w-4 h-4" />, premium: false },
+  { id: 'conjugation', labelKey: 'tabConjugation', icon: <Table2 className="w-4 h-4" />, premium: false },
+  { id: 'grammar', labelKey: 'tabGrammar', icon: <Sparkles className="w-4 h-4" />, premium: false },
+  { id: 'phrases', labelKey: 'tabPhrases', icon: <MessageCircle className="w-4 h-4" />, premium: false },
+  { id: 'culture', labelKey: 'tabCulture', icon: <Mic className="w-4 h-4" />, premium: true },
+  { id: 'related', labelKey: 'tabRelated', icon: <Link2 className="w-4 h-4" />, premium: true },
 ];
 
 export default function ResultTabs({ result, isPremium, onUpgradeClick, onCopied }: ResultTabsProps) {
   const [activeTab, setActiveTab] = useState('basic');
+  const { t } = useLang();
 
   const handleTabClick = (tab: TabDef) => {
     if (tab.premium && !isPremium) {
@@ -45,7 +48,7 @@ export default function ResultTabs({ result, isPremium, onUpgradeClick, onCopied
   return (
     <div className="w-full max-w-xl mx-auto mt-6">
       <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide mb-4 px-1">
-        {tabs.map((tab) => {
+        {tabDefs.map((tab) => {
           const isActive = activeTab === tab.id;
           const isLocked = tab.premium && !isPremium;
           return (
@@ -61,7 +64,7 @@ export default function ResultTabs({ result, isPremium, onUpgradeClick, onCopied
               }`}
             >
               {tab.icon}
-              {tab.label}
+              {t(tab.labelKey)}
               {isLocked && (
                 <Lock className="w-3 h-3 text-stone-400 ml-0.5" />
               )}

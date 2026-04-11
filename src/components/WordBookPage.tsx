@@ -1,5 +1,6 @@
 import { ArrowLeft, Trash2, BookOpen } from 'lucide-react';
 import type { SavedWord } from '../hooks/useSavedWords';
+import { useLang } from '../i18n/LanguageContext';
 
 interface WordBookPageProps {
   savedWords: SavedWord[];
@@ -16,6 +17,8 @@ export default function WordBookPage({
   onRemove,
   onSelect,
 }: WordBookPageProps) {
+  const { t, lang } = useLang();
+
   return (
     <div className="w-full max-w-xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -29,10 +32,10 @@ export default function WordBookPage({
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-100 to-amber-100 flex items-center justify-center">
             <BookOpen className="w-4 h-4 text-rose-500" />
           </div>
-          <h2 className="text-lg font-bold text-stone-800">マイ単語帳</h2>
+          <h2 className="text-lg font-bold text-stone-800">{t('wordbookTitle')}</h2>
         </div>
         <span className="ml-auto text-xs text-stone-400 bg-stone-100 px-2.5 py-1 rounded-full">
-          {savedWords.length}語
+          {savedWords.length}{t('wordbookCount')}
         </span>
       </div>
 
@@ -49,8 +52,8 @@ export default function WordBookPage({
           <div className="w-16 h-16 mx-auto mb-4 bg-stone-100 rounded-2xl flex items-center justify-center">
             <BookOpen className="w-7 h-7 text-stone-300" />
           </div>
-          <p className="text-stone-400 text-sm">保存した単語はまだありません</p>
-          <p className="text-stone-400 text-xs mt-1">検索結果画面で「単語帳に保存」をタップ</p>
+          <p className="text-stone-400 text-sm">{t('wordbookEmpty')}</p>
+          <p className="text-stone-400 text-xs mt-1">{t('wordbookEmptyHint')}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -69,7 +72,7 @@ export default function WordBookPage({
                     <span className="text-sm text-stone-500 truncate">{item.meaning}</span>
                   </div>
                   <p className="text-xs text-stone-400 mt-1">
-                    {new Date(item.created_at).toLocaleDateString('ja-JP')}
+                    {new Date(item.created_at).toLocaleDateString(lang === 'ko' ? 'ko-KR' : 'ja-JP')}
                   </p>
                 </button>
                 <button

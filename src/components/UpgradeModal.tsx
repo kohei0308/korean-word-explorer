@@ -1,17 +1,16 @@
 import { X, Crown, Check } from 'lucide-react';
+import { useLang } from '../i18n/LanguageContext';
 
 interface UpgradeModalProps {
   open: boolean;
   onClose: () => void;
 }
 
-const benefits = [
-  '無制限の単語検索',
-  'ネイティブの声（文化・ニュアンス解説）',
-  '関連語・類義語・対義語',
-];
-
 export default function UpgradeModal({ open, onClose }: UpgradeModalProps) {
+  const { t } = useLang();
+
+  const benefits = [t('upgradeBenefit1'), t('upgradeBenefit2'), t('upgradeBenefit3')];
+
   if (!open) return null;
 
   return (
@@ -29,8 +28,8 @@ export default function UpgradeModal({ open, onClose }: UpgradeModalProps) {
           <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-amber-100 to-amber-200 rounded-2xl flex items-center justify-center">
             <Crown className="w-8 h-8 text-amber-600" />
           </div>
-          <h2 className="text-xl font-bold text-stone-800">プレミアムプラン</h2>
-          <p className="text-stone-500 text-sm mt-1">すべての学習機能をアンロック</p>
+          <h2 className="text-xl font-bold text-stone-800">{t('upgradeTitle')}</h2>
+          <p className="text-stone-500 text-sm mt-1">{t('upgradeSubtitle')}</p>
         </div>
 
         <div className="bg-gradient-to-br from-amber-50 to-rose-50 rounded-2xl p-5 mb-6">
@@ -39,8 +38,8 @@ export default function UpgradeModal({ open, onClose }: UpgradeModalProps) {
             <span className="text-stone-500 text-sm">/月</span>
           </div>
           <ul className="space-y-2.5">
-            {benefits.map((b) => (
-              <li key={b} className="flex items-center gap-2.5 text-sm text-stone-700">
+            {benefits.map((b, i) => (
+              <li key={i} className="flex items-center gap-2.5 text-sm text-stone-700">
                 <Check className="w-4 h-4 text-teal-500 flex-shrink-0" />
                 {b}
               </li>
@@ -49,10 +48,10 @@ export default function UpgradeModal({ open, onClose }: UpgradeModalProps) {
         </div>
 
         <button className="w-full py-3.5 bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-500 hover:to-rose-500 text-white font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-amber-200/50 hover:shadow-amber-300/50">
-          プレミアムに登録する
+          {t('upgradeButton')}
         </button>
         <p className="text-center text-xs text-stone-400 mt-3">
-          いつでもキャンセル可能 ・ Stripe決済
+          {t('upgradeCancel')}
         </p>
       </div>
     </div>

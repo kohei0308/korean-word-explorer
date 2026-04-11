@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useLang } from '../i18n/LanguageContext';
 
 interface AuthModalProps {
   open: boolean;
@@ -13,6 +14,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useLang();
 
   if (!open) return null;
 
@@ -32,7 +34,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
         onClose();
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'エラーが発生しました';
+      const message = err instanceof Error ? err.message : t('authError');
       setError(message);
     } finally {
       setLoading(false);
@@ -51,12 +53,12 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
         </button>
 
         <h2 className="text-xl font-bold text-stone-800 text-center mb-6">
-          {mode === 'login' ? 'ログイン' : 'アカウント作成'}
+          {mode === 'login' ? t('authLoginTitle') : t('authSignupTitle')}
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-stone-600 mb-1">メール</label>
+            <label className="block text-sm font-medium text-stone-600 mb-1">{t('authEmail')}</label>
             <input
               type="email"
               value={email}
@@ -66,7 +68,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-stone-600 mb-1">パスワード</label>
+            <label className="block text-sm font-medium text-stone-600 mb-1">{t('authPassword')}</label>
             <input
               type="password"
               value={password}
@@ -87,15 +89,15 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
             className="w-full py-3 bg-rose-400 hover:bg-rose-500 disabled:bg-stone-300 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {mode === 'login' ? 'ログイン' : '登録'}
+            {mode === 'login' ? t('authLoginButton') : t('authSignupButton')}
           </button>
         </form>
 
         <p className="text-center text-sm text-stone-500 mt-4">
           {mode === 'login' ? (
-            <>アカウントがない？ <button onClick={() => { setMode('signup'); setError(null); }} className="text-rose-500 font-medium hover:underline">新規登録</button></>
+            <>{t('authNoAccount')} <button onClick={() => { setMode('signup'); setError(null); }} className="text-rose-500 font-medium hover:underline">{t('authSignupLink')}</button></>
           ) : (
-            <>アカウントをお持ちの方は <button onClick={() => { setMode('login'); setError(null); }} className="text-rose-500 font-medium hover:underline">ログイン</button></>
+            <>{t('authHasAccount')} <button onClick={() => { setMode('login'); setError(null); }} className="text-rose-500 font-medium hover:underline">{t('authLoginLink')}</button></>
           )}
         </p>
       </div>

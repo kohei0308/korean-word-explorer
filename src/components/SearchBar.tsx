@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Search, Loader2 } from 'lucide-react';
+import { useLang } from '../i18n/LanguageContext';
 
 interface SearchBarProps {
   onSearch: (word: string) => void;
@@ -8,6 +9,7 @@ interface SearchBarProps {
 
 export default function SearchBar({ onSearch, loading }: SearchBarProps) {
   const [query, setQuery] = useState('');
+  const { t } = useLang();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -26,7 +28,7 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="韓国語を入力... 例: 사랑, 감사하다"
+            placeholder={t('searchPlaceholder')}
             className="flex-1 px-4 py-4 text-base bg-transparent text-stone-800 placeholder-stone-400 focus:outline-none"
             disabled={loading}
           />
@@ -38,7 +40,7 @@ export default function SearchBar({ onSearch, loading }: SearchBarProps) {
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              '検索'
+              t('searchButton')
             )}
           </button>
         </div>
