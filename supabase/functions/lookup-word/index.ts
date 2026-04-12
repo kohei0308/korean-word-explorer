@@ -176,7 +176,8 @@ STEP 2 – Generate a complete Japanese word dictionary entry. ALL of the follow
 - "basic.partOfSpeech" = written in 한국어 (명사/동사/い형용사/な형용사/부사/etc)
 - "basic.level" = JLPT level estimate (N5-N1)
 - All conjugation values = Japanese conjugation forms
-- "grammar[].pattern" and "grammar[].example" = Japanese
+- "grammar[].pattern" = 한국어로 문법 패턴 이름을 작성 (예: "명사 + を + 동사", "~てから + 동사"). 일본어 조사·활용은 그대로 두되 설명 부분은 한국어로.
+- "grammar[].example" = Japanese example sentence
 - "grammar[].explanation" and "grammar[].translation" = 한국어
 - "phrases[].phrase" = Japanese
 - "phrases[].translation" and "phrases[].scene" = 한국어
@@ -205,7 +206,7 @@ Return this JSON:
   },
   "grammar": [
     {
-      "pattern": "日本語の文法パターン",
+      "pattern": "한국어 문법 패턴명 (예: 명사 + を + 동사)",
       "explanation": "한국어 설명",
       "example": "日本語の例文",
       "translation": "한국어 번역"
