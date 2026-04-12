@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { User, LogOut, Crown, BookOpen } from 'lucide-react';
+import { User, Crown, BookOpen, CircleUser as UserCircle } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { useLang } from './i18n/LanguageContext';
 import { useWordLookup } from './hooks/useWordLookup';
@@ -14,16 +14,19 @@ import UsageBadge from './components/UsageBadge';
 import UpgradeModal from './components/UpgradeModal';
 import AuthModal from './components/AuthModal';
 import WordBookPage from './components/WordBookPage';
+import MyPage from './components/MyPage';
 import Toast from './components/Toast';
 import type { Session } from '@supabase/supabase-js';
 
-type Page = 'home' | 'wordbook';
+type Page = 'home' | 'wordbook' | 'mypage';
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
-  const [page, setPage] = useState<Page>('home');
+  const [page, setPageState] = useState<Page>(() => {
+    return window.location.pathname === '/mypage' ? 'mypage' : 'home';
+  });
   const { result, loading, error, isPremium, tier, usage, lookup } = useWordLookup();
   const { toast, showToast, hideToast } = useToast();
   const { lang, setLang, t } = useLang();
@@ -31,6 +34,20 @@ export default function App() {
   const userId = session?.user?.id ?? null;
   const { history, addEntry, clearHistory } = useSearchHistory(userId);
   const { savedWords, loading: savedLoading, saveWord, removeWord, isWordSaved } = useSavedWords(userId);
+
+  const setPage = useCallback((p: Page) => {
+    setPageState(p);
+    const url = p === 'mypage' ? '/mypage' : '/';
+    window.history.pushState({}, '', url);
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setPageState(window.location.pathname === '/mypage' ? 'mypage' : 'home');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
@@ -76,10 +93,6 @@ export default function App() {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-  };
 
   const handleSearch = useCallback(async (word: string) => {
     setPage('home');
@@ -155,11 +168,11 @@ export default function App() {
                   </button>
                 )}
                 <button
-                  onClick={handleSignOut}
+                  onClick={() => setPage('mypage')}
                   className="p-2 text-stone-400 hover:text-stone-600 transition-colors"
-                  title={t('logout')}
+                  title={t('mypage')}
                 >
-                  <LogOut className="w-4 h-4" />
+                  <UserCircle className="w-4 h-4" />
                 </button>
               </>
             ) : (
@@ -176,7 +189,15 @@ export default function App() {
       </header>
 
       <main className="relative z-10 px-4 pb-16">
-        {page === 'wordbook' && session ? (
+        {page === 'mypage' && session ? (
+          <MyPage
+            userId={session.user.id}
+            onBack={() => setPage('home')}
+            onSearch={(word) => { setPage('home'); handleSearch(word); }}
+            onUpgrade={() => setShowUpgrade(true)}
+            onToast={showToast}
+          />
+        ) : page === 'wordbook' && session ? (
           <WordBookPage
             savedWords={savedWords}
             loading={savedLoading}
