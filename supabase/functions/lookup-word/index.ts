@@ -90,20 +90,8 @@ async function getUsageCount(
   }
 }
 
-function buildPrompt(trimmedWord: string, lang: string): string {
-  const isKo = lang === "ko";
-  const meaningDesc = isKo
-    ? "한국어 뜻 (여러 개면 쉼표로 구분)"
-    : "日本語の意味（複数あればカンマ区切り）";
-  const posDesc = isKo
-    ? "품사 (명사/동사/형용사/부사/etc)"
-    : "品詞（名詞/動詞/形容詞/副詞/etc）";
-  const explLang = isKo ? "한국어" : "日本語";
-  const relationDesc = isKo
-    ? "관계 (유의어/반의어/관련어)"
-    : "関係性（類義語/対義語/関連語）";
-
-  return `You are a Korean language dictionary. The user entered "${trimmedWord}".
+function buildPrompt(trimmedWord: string, _lang: string): string {
+  return `You are a Korean language dictionary for Japanese-speaking learners. The user entered "${trimmedWord}".
 
 STEP 1 – Detect input language and find the Korean word:
 - If the input is Korean (Hangul), use it directly as the target Korean word.
@@ -111,27 +99,27 @@ STEP 1 – Detect input language and find the Korean word:
 
 STEP 2 – Generate a complete Korean word dictionary entry. ALL of the following rules are MANDATORY:
 - "basic.word" = the target Korean word in Hangul (NEVER Japanese/English/other)
-- "basic.meaning" = meaning written in ${explLang}
-- "basic.pronunciation" = katakana reading of the Korean word
+- "basic.meaning" = meaning written in 日本語（複数あればカンマ区切り）
+- "basic.pronunciation" = katakana reading of the Korean word (e.g. トゥギョプタ). ALWAYS provide this.
 - "basic.romanization" = romanized Korean pronunciation
-- "basic.partOfSpeech" = written in ${explLang}
+- "basic.partOfSpeech" = written in 日本語（名詞/動詞/形容詞/副詞/etc）
 - All conjugation values = Korean conjugation forms in Hangul
 - "grammar[].pattern" and "grammar[].example" = Korean
-- "grammar[].explanation" and "grammar[].translation" = ${explLang}
+- "grammar[].explanation" and "grammar[].translation" = 日本語
 - "phrases[].phrase" = Korean
-- "phrases[].translation" and "phrases[].scene" = ${explLang}
-- "culture.note" = ${explLang} (about 200 chars)
+- "phrases[].translation" and "phrases[].scene" = 日本語
+- "culture.note" = 日本語 (about 200 chars)
 - "related[].word" = Korean (Hangul)
-- "related[].meaning" and "related[].relation" = ${explLang}
+- "related[].meaning" and "related[].relation" = 日本語（関係性：類義語/対義語/関連語）
 
 Return this JSON:
 {
   "basic": {
     "word": "한국어 단어 (한글)",
-    "meaning": "${meaningDesc}",
+    "meaning": "日本語の意味（複数あればカンマ区切り）",
     "pronunciation": "カタカナ読み",
     "romanization": "ローマ字表記",
-    "partOfSpeech": "${posDesc}",
+    "partOfSpeech": "品詞（名詞/動詞/形容詞/副詞/etc）",
     "level": "TOPIK級（1-6、推定）"
   },
   "conjugation": {
@@ -146,26 +134,26 @@ Return this JSON:
   "grammar": [
     {
       "pattern": "韓国語の文法パターン",
-      "explanation": "${explLang}の説明",
+      "explanation": "日本語の説明",
       "example": "韓国語の例文",
-      "translation": "${explLang}の訳"
+      "translation": "日本語の訳"
     }
   ],
   "phrases": [
     {
       "phrase": "韓国語フレーズ",
-      "translation": "${explLang}の訳",
-      "scene": "${explLang}での場面説明"
+      "translation": "日本語の訳",
+      "scene": "日本語での場面説明"
     }
   ],
   "culture": {
-    "note": "${explLang}で200文字程度の文化・ニュアンス説明"
+    "note": "日本語で200文字程度の文化・ニュアンス説明"
   },
   "related": [
     {
       "word": "関連韓国語単語（ハングル）",
-      "meaning": "${explLang}の意味",
-      "relation": "${relationDesc}"
+      "meaning": "日本語の意味",
+      "relation": "関係性（類義語/対義語/関連語）"
     }
   ]
 }
