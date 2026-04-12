@@ -91,100 +91,81 @@ async function getUsageCount(
 }
 
 function buildPrompt(trimmedWord: string, lang: string): string {
-  if (lang === "ko") {
-    return `You are a Japanese language expert helping Korean learners. Given the Japanese word "${trimmedWord}", return a JSON object with these exact keys (all text in Korean except Japanese examples):
+  const isKo = lang === "ko";
+  const meaningDesc = isKo
+    ? "한국어 뜻 (여러 개면 쉼표로 구분)"
+    : "日本語の意味（複数あればカンマ区切り）";
+  const posDesc = isKo
+    ? "품사 (명사/동사/형용사/부사/etc)"
+    : "品詞（名詞/動詞/形容詞/副詞/etc）";
+  const explLang = isKo ? "한국어" : "日本語";
+  const relationDesc = isKo
+    ? "관계 (유의어/반의어/관련어)"
+    : "関係性（類義語/対義語/関連語）";
 
+  return `You are a Korean language dictionary. The user entered "${trimmedWord}".
+
+STEP 1 – Detect input language and find the Korean word:
+- If the input is Korean (Hangul), use it directly as the target Korean word.
+- If the input is Japanese, English, or any other language, identify the most appropriate Korean (한국어) equivalent word and use that as the target.
+
+STEP 2 – Generate a complete Korean word dictionary entry. ALL of the following rules are MANDATORY:
+- "basic.word" = the target Korean word in Hangul (NEVER Japanese/English/other)
+- "basic.meaning" = meaning written in ${explLang}
+- "basic.pronunciation" = katakana reading of the Korean word
+- "basic.romanization" = romanized Korean pronunciation
+- "basic.partOfSpeech" = written in ${explLang}
+- All conjugation values = Korean conjugation forms in Hangul
+- "grammar[].pattern" and "grammar[].example" = Korean
+- "grammar[].explanation" and "grammar[].translation" = ${explLang}
+- "phrases[].phrase" = Korean
+- "phrases[].translation" and "phrases[].scene" = ${explLang}
+- "culture.note" = ${explLang} (about 200 chars)
+- "related[].word" = Korean (Hangul)
+- "related[].meaning" and "related[].relation" = ${explLang}
+
+Return this JSON:
 {
   "basic": {
-    "word": "${trimmedWord}",
-    "meaning": "한국어 뜻 (여러 개면 쉼표로 구분)",
-    "pronunciation": "가타카나 읽기",
-    "romanization": "로마자 표기",
-    "partOfSpeech": "품사 (명사/동사/형용사/부사/etc)",
-    "level": "JLPT 급수 (N1-N5, 추정)"
-  },
-  "conjugation": {
-    "haeyoForm": "ます형",
-    "habnidaForm": "사전형 (기본형)",
-    "panmalForm": "て형",
-    "negativeHaeyo": "부정형 (ません)",
-    "negativeHabnida": "부정형 (ない)",
-    "pastHaeyo": "과거형 (ました)",
-    "pastHabnida": "과거형 (た)"
-  },
-  "grammar": [
-    {
-      "pattern": "문법 패턴 (일본어)",
-      "explanation": "패턴 설명 (한국어)",
-      "example": "일본어 예문",
-      "translation": "한국어 번역"
-    }
-  ],
-  "phrases": [
-    {
-      "phrase": "실전 프레이즈 (일본어)",
-      "translation": "한국어 번역",
-      "scene": "사용 장면 설명"
-    }
-  ],
-  "culture": {
-    "note": "이 단어와 관련된 일본 문화·뉘앙스 설명 (한국어로 200자 정도)"
-  },
-  "related": [
-    {
-      "word": "관련 일본어 단어",
-      "meaning": "한국어 뜻",
-      "relation": "관계 (유의어/반의어/관련어)"
-    }
-  ]
-}
-
-Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns, 4 phrases, and 5 related words.`;
-  }
-
-  return `You are a Korean language expert helping Japanese learners. Given the Korean word "${trimmedWord}", return a JSON object with these exact keys (all text in Japanese except Korean examples):
-
-{
-  "basic": {
-    "word": "${trimmedWord}",
-    "meaning": "日本語の意味（複数あればカンマ区切り）",
+    "word": "한국어 단어 (한글)",
+    "meaning": "${meaningDesc}",
     "pronunciation": "カタカナ読み",
     "romanization": "ローマ字表記",
-    "partOfSpeech": "品詞（名詞/動詞/形容詞/副詞/etc）",
+    "partOfSpeech": "${posDesc}",
     "level": "TOPIK級（1-6、推定）"
   },
   "conjugation": {
     "haeyoForm": "해요体",
     "habnidaForm": "합니다体",
-    "panmalForm": "パンマル（반말）",
-    "negativeHaeyo": "否定形（해요体）",
-    "negativeHabnida": "否定形（합니다体）",
-    "pastHaeyo": "過去形（해요体）",
-    "pastHabnida": "過去形（합니다体）"
+    "panmalForm": "반말",
+    "negativeHaeyo": "부정형(해요体)",
+    "negativeHabnida": "부정형(합니다体)",
+    "pastHaeyo": "과거형(해요体)",
+    "pastHabnida": "과거형(합니다体)"
   },
   "grammar": [
     {
-      "pattern": "文法パターン（韓国語）",
-      "explanation": "パターンの説明（日本語）",
+      "pattern": "韓国語の文法パターン",
+      "explanation": "${explLang}の説明",
       "example": "韓国語の例文",
-      "translation": "日本語訳"
+      "translation": "${explLang}の訳"
     }
   ],
   "phrases": [
     {
-      "phrase": "実践フレーズ（韓国語）",
-      "translation": "日本語訳",
-      "scene": "使う場面の説明"
+      "phrase": "韓国語フレーズ",
+      "translation": "${explLang}の訳",
+      "scene": "${explLang}での場面説明"
     }
   ],
   "culture": {
-    "note": "この単語に関連する韓国文化・ニュアンスの説明（日本語で200文字程度）"
+    "note": "${explLang}で200文字程度の文化・ニュアンス説明"
   },
   "related": [
     {
-      "word": "関連する韓国語単語",
-      "meaning": "日本語の意味",
-      "relation": "関係性（類義語/対義語/関連語）"
+      "word": "関連韓国語単語（ハングル）",
+      "meaning": "${explLang}の意味",
+      "relation": "${relationDesc}"
     }
   ]
 }

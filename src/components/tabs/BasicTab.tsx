@@ -8,8 +8,8 @@ interface BasicTabProps {
 }
 
 export default function BasicTab({ data }: BasicTabProps) {
-  const { t, lang } = useLang();
-  const speechLang = lang === 'ja' ? 'ko-KR' : 'ja-JP';
+  const { t } = useLang();
+  const speechLang = 'ko-KR';
 
   return (
     <div className="space-y-4">

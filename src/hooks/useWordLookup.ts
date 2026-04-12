@@ -71,7 +71,6 @@ export function useWordLookup() {
       }
 
       if (json.data) {
-        json.data.basic.word = word.trim();
         setResult(json.data);
         setIsPremium(json.isPremium || false);
       }

@@ -10,8 +10,8 @@ interface GrammarTabProps {
 }
 
 export default function GrammarTab({ data, onCopied }: GrammarTabProps) {
-  const { t, lang } = useLang();
-  const speechLang = lang === 'ja' ? 'ko-KR' : 'ja-JP';
+  const { t } = useLang();
+  const speechLang = 'ko-KR';
 
   return (
     <div className="space-y-4">
