@@ -16,6 +16,24 @@ function jsonResponse(data: unknown, status = 200) {
   });
 }
 
+const PLANS = {
+  month: {
+    currency: "jpy",
+    unitAmount: 980,
+    interval: "month" as const,
+    name: "Premium Plan (Monthly)",
+    description: "Unlimited word lookups, culture notes, and related words",
+  },
+  year: {
+    currency: "jpy",
+    unitAmount: 7800,
+    interval: "year" as const,
+    name: "Premium Plan (Yearly)",
+    description:
+      "Unlimited word lookups, culture notes, and related words - Save 33%",
+  },
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -36,11 +54,13 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Authentication required." }, 401);
     }
 
-    const token = authHeader.replace("Bearer ", "");
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await userClient.auth.getUser();
 
     if (authError || !user) {
       return jsonResponse({ error: "Invalid authentication." }, 401);
@@ -53,8 +73,20 @@ Deno.serve(async (req: Request) => {
       // body is optional
     }
 
-    const successUrl = typeof body.successUrl === "string" ? body.successUrl : `${req.headers.get("origin") || supabaseUrl}`;
-    const cancelUrl = typeof body.cancelUrl === "string" ? body.cancelUrl : `${req.headers.get("origin") || supabaseUrl}`;
+    const interval =
+      body.interval === "year" || body.interval === "month"
+        ? body.interval
+        : "month";
+    const plan = PLANS[interval];
+
+    const successUrl =
+      typeof body.successUrl === "string"
+        ? body.successUrl
+        : `${req.headers.get("origin") || supabaseUrl}`;
+    const cancelUrl =
+      typeof body.cancelUrl === "string"
+        ? body.cancelUrl
+        : `${req.headers.get("origin") || supabaseUrl}`;
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2024-12-18.acacia" });
     const supabase = createClient(supabaseUrl, serviceKey);
@@ -81,12 +113,12 @@ Deno.serve(async (req: Request) => {
       line_items: [
         {
           price_data: {
-            currency: "jpy",
-            unit_amount: 500,
-            recurring: { interval: "month" },
+            currency: plan.currency,
+            unit_amount: plan.unitAmount,
+            recurring: { interval: plan.interval },
             product_data: {
-              name: "Premium Plan",
-              description: "Unlimited word lookups, culture notes, and related words",
+              name: plan.name,
+              description: plan.description,
             },
           },
           quantity: 1,
@@ -95,14 +127,23 @@ Deno.serve(async (req: Request) => {
       success_url: `${successUrl}?checkout=success`,
       cancel_url: `${cancelUrl}?checkout=cancel`,
       subscription_data: {
-        metadata: { supabase_user_id: user.id },
+        metadata: {
+          supabase_user_id: user.id,
+          plan_interval: interval,
+        },
       },
-      metadata: { supabase_user_id: user.id },
+      metadata: {
+        supabase_user_id: user.id,
+        plan_interval: interval,
+      },
     });
 
     return jsonResponse({ url: session.url });
   } catch (err) {
     console.error("Checkout session error:", err);
-    return jsonResponse({ error: "Failed to create checkout session." }, 500);
+    return jsonResponse(
+      { error: "Failed to create checkout session." },
+      500,
+    );
   }
 });

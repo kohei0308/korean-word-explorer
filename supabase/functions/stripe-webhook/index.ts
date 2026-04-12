@@ -23,6 +23,7 @@ async function upsertSubscription(
   subscriptionId: string,
   status: string,
   currentPeriodEnd: Date,
+  planInterval: string,
 ) {
   const { error } = await supabase
     .from("subscriptions")
@@ -33,6 +34,7 @@ async function upsertSubscription(
         stripe_subscription_id: subscriptionId,
         status,
         current_period_end: currentPeriodEnd.toISOString(),
+        plan_interval: planInterval,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" },
@@ -41,6 +43,18 @@ async function upsertSubscription(
   if (error) {
     console.error("Subscription upsert error:", error);
   }
+}
+
+function detectPlanInterval(subscription: Stripe.Subscription): string {
+  const metaInterval = subscription.metadata?.plan_interval;
+  if (metaInterval === "month" || metaInterval === "year") {
+    return metaInterval;
+  }
+  const item = subscription.items?.data?.[0];
+  if (item?.price?.recurring?.interval === "year") {
+    return "year";
+  }
+  return "month";
 }
 
 Deno.serve(async (req: Request) => {
@@ -92,7 +106,10 @@ Deno.serve(async (req: Request) => {
         const subscriptionId = session.subscription as string;
 
         if (userId && subscriptionId) {
-          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+          const subscription =
+            await stripe.subscriptions.retrieve(subscriptionId);
+          const planInterval = session.metadata?.plan_interval ||
+            detectPlanInterval(subscription);
           await upsertSubscription(
             supabase,
             userId,
@@ -100,6 +117,7 @@ Deno.serve(async (req: Request) => {
             subscriptionId,
             subscription.status,
             new Date(subscription.current_period_end * 1000),
+            planInterval,
           );
         }
         break;
@@ -110,6 +128,7 @@ Deno.serve(async (req: Request) => {
         const userId = subscription.metadata?.supabase_user_id;
 
         if (userId) {
+          const planInterval = detectPlanInterval(subscription);
           await upsertSubscription(
             supabase,
             userId,
@@ -117,6 +136,7 @@ Deno.serve(async (req: Request) => {
             subscription.id,
             subscription.status,
             new Date(subscription.current_period_end * 1000),
+            planInterval,
           );
         }
         break;
@@ -127,6 +147,7 @@ Deno.serve(async (req: Request) => {
         const userId = subscription.metadata?.supabase_user_id;
 
         if (userId) {
+          const planInterval = detectPlanInterval(subscription);
           await upsertSubscription(
             supabase,
             userId,
@@ -134,6 +155,7 @@ Deno.serve(async (req: Request) => {
             subscription.id,
             "canceled",
             new Date(subscription.current_period_end * 1000),
+            planInterval,
           );
         }
         break;
@@ -144,10 +166,12 @@ Deno.serve(async (req: Request) => {
         const subscriptionId = invoice.subscription as string;
 
         if (subscriptionId) {
-          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+          const subscription =
+            await stripe.subscriptions.retrieve(subscriptionId);
           const userId = subscription.metadata?.supabase_user_id;
 
           if (userId) {
+            const planInterval = detectPlanInterval(subscription);
             await upsertSubscription(
               supabase,
               userId,
@@ -155,6 +179,7 @@ Deno.serve(async (req: Request) => {
               subscriptionId,
               "past_due",
               new Date(subscription.current_period_end * 1000),
+              planInterval,
             );
           }
         }

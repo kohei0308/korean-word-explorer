@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { X, Crown, Check, Loader2 } from 'lucide-react';
+import { X, Crown, Check, Loader2, Sparkles } from 'lucide-react';
 import { useLang } from '../i18n/LanguageContext';
 import { supabase } from '../lib/supabase';
+
+type PlanInterval = 'month' | 'year';
 
 interface UpgradeModalProps {
   open: boolean;
@@ -12,6 +14,7 @@ export default function UpgradeModal({ open, onClose }: UpgradeModalProps) {
   const { t } = useLang();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [interval, setInterval] = useState<PlanInterval>('year');
 
   const benefits = [t('upgradeBenefit1'), t('upgradeBenefit2'), t('upgradeBenefit3')];
 
@@ -38,6 +41,7 @@ export default function UpgradeModal({ open, onClose }: UpgradeModalProps) {
           'apikey': anonKey,
         },
         body: JSON.stringify({
+          interval,
           successUrl: window.location.origin,
           cancelUrl: window.location.origin,
         }),
@@ -63,7 +67,7 @@ export default function UpgradeModal({ open, onClose }: UpgradeModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 animate-modal-in">
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 animate-modal-in">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-1.5 text-stone-400 hover:text-stone-600 transition-colors"
@@ -79,11 +83,72 @@ export default function UpgradeModal({ open, onClose }: UpgradeModalProps) {
           <p className="text-stone-500 text-sm mt-1">{t('upgradeSubtitle')}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-amber-50 to-rose-50 rounded-2xl p-5 mb-6">
-          <div className="flex items-baseline justify-center gap-1 mb-4">
-            <span className="text-3xl font-bold text-stone-800">¥500</span>
-            <span className="text-stone-500 text-sm">/月</span>
+        <div className="flex items-center justify-center gap-3 mb-6">
+          <button
+            onClick={() => setInterval('month')}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+              interval === 'month'
+                ? 'bg-stone-800 text-white shadow-md'
+                : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+            }`}
+          >
+            {t('planMonthly')}
+          </button>
+          <button
+            onClick={() => setInterval('year')}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 relative ${
+              interval === 'year'
+                ? 'bg-stone-800 text-white shadow-md'
+                : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+            }`}
+          >
+            {t('planYearly')}
+            <span className="absolute -top-2.5 -right-2.5 px-1.5 py-0.5 bg-rose-500 text-white text-[9px] font-bold rounded-full leading-none">
+              {t('planYearlyDiscount')}
+            </span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <div
+            onClick={() => setInterval('month')}
+            className={`relative cursor-pointer rounded-2xl p-4 border-2 transition-all duration-200 ${
+              interval === 'month'
+                ? 'border-stone-800 bg-stone-50 shadow-sm'
+                : 'border-stone-200 bg-white hover:border-stone-300'
+            }`}
+          >
+            <p className="text-xs font-medium text-stone-500 mb-2">{t('planMonthly')}</p>
+            <div className="flex items-baseline gap-0.5">
+              <span className="text-2xl font-bold text-stone-800">{t('planMonthlyPrice')}</span>
+              <span className="text-stone-400 text-xs">{t('planMonthlyUnit')}</span>
+            </div>
           </div>
+
+          <div
+            onClick={() => setInterval('year')}
+            className={`relative cursor-pointer rounded-2xl p-4 border-2 transition-all duration-200 ${
+              interval === 'year'
+                ? 'border-amber-500 bg-amber-50/50 shadow-sm ring-1 ring-amber-200'
+                : 'border-stone-200 bg-white hover:border-stone-300'
+            }`}
+          >
+            {interval === 'year' && (
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2.5 py-0.5 bg-gradient-to-r from-amber-400 to-rose-400 text-white text-[10px] font-bold rounded-full whitespace-nowrap">
+                <Sparkles className="w-2.5 h-2.5" />
+                {t('planRecommended')}
+              </div>
+            )}
+            <p className="text-xs font-medium text-stone-500 mb-2">{t('planYearly')}</p>
+            <div className="flex items-baseline gap-0.5">
+              <span className="text-2xl font-bold text-stone-800">{t('planYearlyPrice')}</span>
+              <span className="text-stone-400 text-xs">{t('planYearlyUnit')}</span>
+            </div>
+            <p className="text-[11px] text-amber-600 font-medium mt-1">{t('planYearlyEquiv')}</p>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-stone-50 to-stone-100/50 rounded-2xl p-4 mb-6">
           <ul className="space-y-2.5">
             {benefits.map((b, i) => (
               <li key={i} className="flex items-center gap-2.5 text-sm text-stone-700">
