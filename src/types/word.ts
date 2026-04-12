@@ -8,13 +8,20 @@ export interface BasicInfo {
 }
 
 export interface Conjugation {
-  haeyoForm: string;
-  habnidaForm: string;
-  panmalForm: string;
-  negativeHaeyo: string;
-  negativeHabnida: string;
-  pastHaeyo: string;
-  pastHabnida: string;
+  haeyoForm?: string;
+  habnidaForm?: string;
+  panmalForm?: string;
+  negativeHaeyo?: string;
+  negativeHabnida?: string;
+  pastHaeyo?: string;
+  pastHabnida?: string;
+  masuForm?: string;
+  teForm?: string;
+  dictionaryForm?: string;
+  naiForm?: string;
+  taForm?: string;
+  potentialForm?: string;
+  volitionalForm?: string;
 }
 
 export interface GrammarPattern {

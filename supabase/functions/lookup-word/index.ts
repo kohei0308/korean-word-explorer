@@ -90,7 +90,7 @@ async function getUsageCount(
   }
 }
 
-function buildPrompt(trimmedWord: string, _lang: string): string {
+function buildPromptJa(trimmedWord: string): string {
   return `You are a Korean language dictionary for Japanese-speaking learners. The user entered "${trimmedWord}".
 
 STEP 1 – Detect input language and find the Korean word:
@@ -159,6 +159,84 @@ Return this JSON:
 }
 
 Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns, 4 phrases, and 5 related words.`;
+}
+
+function buildPromptKo(trimmedWord: string): string {
+  return `You are a Japanese language dictionary for Korean-speaking learners. The user entered "${trimmedWord}".
+
+STEP 1 – Detect input language and find the Japanese word:
+- If the input is Japanese (hiragana/katakana/kanji), use it directly as the target Japanese word.
+- If the input is Korean, English, or any other language, identify the most appropriate Japanese (日本語) equivalent word and use that as the target.
+
+STEP 2 – Generate a complete Japanese word dictionary entry. ALL of the following rules are MANDATORY:
+- "basic.word" = the target Japanese word (kanji with furigana or hiragana). NEVER Korean/English/other.
+- "basic.meaning" = meaning written in 한국어 (여러 개면 쉼표로 구분)
+- "basic.pronunciation" = hiragana reading of the Japanese word (e.g. たべる). ALWAYS provide this.
+- "basic.romanization" = romanized Japanese pronunciation (e.g. taberu)
+- "basic.partOfSpeech" = written in 한국어 (명사/동사/い형용사/な형용사/부사/etc)
+- "basic.level" = JLPT level estimate (N5-N1)
+- All conjugation values = Japanese conjugation forms
+- "grammar[].pattern" and "grammar[].example" = Japanese
+- "grammar[].explanation" and "grammar[].translation" = 한국어
+- "phrases[].phrase" = Japanese
+- "phrases[].translation" and "phrases[].scene" = 한국어
+- "culture.note" = 한국어 (약 200자의 문화·뉘앙스 설명)
+- "related[].word" = Japanese (kanji/hiragana)
+- "related[].meaning" and "related[].relation" = 한국어 (관계: 유의어/반의어/관련어)
+
+Return this JSON:
+{
+  "basic": {
+    "word": "日本語の単語（漢字・ひらがな）",
+    "meaning": "한국어 뜻 (쉼표로 구분)",
+    "pronunciation": "ひらがな読み",
+    "romanization": "ローマ字表記",
+    "partOfSpeech": "품사 (한국어)",
+    "level": "JLPT N5-N1"
+  },
+  "conjugation": {
+    "masuForm": "ます形",
+    "teForm": "て形",
+    "dictionaryForm": "辞書形",
+    "naiForm": "ない形",
+    "taForm": "た形",
+    "potentialForm": "可能形",
+    "volitionalForm": "意志形"
+  },
+  "grammar": [
+    {
+      "pattern": "日本語の文法パターン",
+      "explanation": "한국어 설명",
+      "example": "日本語の例文",
+      "translation": "한국어 번역"
+    }
+  ],
+  "phrases": [
+    {
+      "phrase": "日本語フレーズ",
+      "translation": "한국어 번역",
+      "scene": "한국어 장면 설명"
+    }
+  ],
+  "culture": {
+    "note": "한국어로 200자 정도의 문화·뉘앙스 설명"
+  },
+  "related": [
+    {
+      "word": "관련 일본어 단어",
+      "meaning": "한국어 뜻",
+      "relation": "관계 (유의어/반의어/관련어)"
+    }
+  ]
+}
+
+Return ONLY valid JSON. No markdown, no explanation. Provide 3 grammar patterns, 4 phrases, and 5 related words.`;
+}
+
+function buildPrompt(trimmedWord: string, lang: string): string {
+  return lang === "ko"
+    ? buildPromptKo(trimmedWord)
+    : buildPromptJa(trimmedWord);
 }
 
 Deno.serve(async (req: Request) => {

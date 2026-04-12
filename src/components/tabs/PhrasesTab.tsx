@@ -10,8 +10,8 @@ interface PhrasesTabProps {
 }
 
 export default function PhrasesTab({ data, onCopied }: PhrasesTabProps) {
-  const { t } = useLang();
-  const speechLang = 'ko-KR';
+  const { t, lang } = useLang();
+  const speechLang = lang === 'ko' ? 'ja-JP' : 'ko-KR';
 
   return (
     <div className="space-y-3">
