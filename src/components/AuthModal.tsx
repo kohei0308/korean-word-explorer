@@ -2,6 +2,15 @@ import { useState, type FormEvent } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useLang } from '../i18n/LanguageContext';
+import type { TranslationKey } from '../i18n/translations';
+
+const authErrorMap: [RegExp, TranslationKey][] = [
+  [/Invalid login credentials/i, 'authErrorInvalidCredentials'],
+  [/Email not confirmed/i, 'authErrorEmailNotConfirmed'],
+  [/User already registered/i, 'authErrorUserExists'],
+  [/Password should be at least 6 characters/i, 'authErrorPasswordTooShort'],
+  [/Unable to validate email address: invalid format/i, 'authErrorInvalidEmail'],
+];
 
 interface AuthModalProps {
   open: boolean;
@@ -16,6 +25,14 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { t } = useLang();
+
+  const translateAuthError = (err: unknown): string => {
+    const raw = err instanceof Error ? err.message : '';
+    for (const [pattern, key] of authErrorMap) {
+      if (pattern.test(raw)) return t(key);
+    }
+    return t('authError');
+  };
 
   if (!open) return null;
 
@@ -35,8 +52,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
         onClose();
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('authError');
-      setError(message);
+      setError(translateAuthError(err));
     } finally {
       setLoading(false);
     }
@@ -55,8 +71,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
       });
       if (err) throw err;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('authError');
-      setError(message);
+      setError(translateAuthError(err));
       setGoogleLoading(false);
     }
   };
