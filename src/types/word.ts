@@ -28,11 +28,15 @@ export interface GrammarPattern {
   pattern: string;
   explanation: string;
   example: string;
+  exampleReading?: string;
+  exampleRomanization?: string;
   translation: string;
 }
 
 export interface Phrase {
   phrase: string;
+  phraseReading?: string;
+  phraseRomanization?: string;
   translation: string;
   scene: string;
 }

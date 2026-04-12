@@ -105,8 +105,10 @@ STEP 2 – Generate a complete Korean word dictionary entry. ALL of the followin
 - "basic.partOfSpeech" = written in 日本語（名詞/動詞/形容詞/副詞/etc）
 - All conjugation values = Korean conjugation forms in Hangul
 - "grammar[].pattern" and "grammar[].example" = Korean
+- "grammar[].exampleRomanization" = romanized Korean reading of the example sentence (e.g. tteugeowoyo)
 - "grammar[].explanation" and "grammar[].translation" = 日本語
 - "phrases[].phrase" = Korean
+- "phrases[].phraseRomanization" = romanized Korean reading of the phrase (e.g. tteugeowoyo)
 - "phrases[].translation" and "phrases[].scene" = 日本語
 - "culture.note" = 日本語 (about 200 chars)
 - "related[].word" = Korean (Hangul)
@@ -136,12 +138,14 @@ Return this JSON:
       "pattern": "韓国語の文法パターン",
       "explanation": "日本語の説明",
       "example": "韓国語の例文",
+      "exampleRomanization": "romanized Korean reading",
       "translation": "日本語の訳"
     }
   ],
   "phrases": [
     {
       "phrase": "韓国語フレーズ",
+      "phraseRomanization": "romanized Korean reading",
       "translation": "日本語の訳",
       "scene": "日本語での場面説明"
     }
@@ -178,8 +182,12 @@ STEP 2 – Generate a complete Japanese word dictionary entry. ALL of the follow
 - All conjugation values = Japanese conjugation forms
 - "grammar[].pattern" = 한국어로 문법 패턴 이름을 작성 (예: "명사 + を + 동사", "~てから + 동사"). 일본어 조사·활용은 그대로 두되 설명 부분은 한국어로.
 - "grammar[].example" = Japanese example sentence
+- "grammar[].exampleReading" = full hiragana reading of the example sentence (e.g. あたらしいです)
+- "grammar[].exampleRomanization" = romanized Japanese reading of the example sentence (e.g. atarashii desu)
 - "grammar[].explanation" and "grammar[].translation" = 한국어
 - "phrases[].phrase" = Japanese
+- "phrases[].phraseReading" = full hiragana reading of the phrase (e.g. あたらしいです)
+- "phrases[].phraseRomanization" = romanized Japanese reading of the phrase (e.g. atarashii desu)
 - "phrases[].translation" and "phrases[].scene" = 한국어
 - "culture.note" = 한국어 (약 200자의 문화·뉘앙스 설명)
 - "related[].word" = Japanese (kanji/hiragana)
@@ -209,12 +217,16 @@ Return this JSON:
       "pattern": "한국어 문법 패턴명 (예: 명사 + を + 동사)",
       "explanation": "한국어 설명",
       "example": "日本語の例文",
+      "exampleReading": "ひらがな読み",
+      "exampleRomanization": "romaji reading",
       "translation": "한국어 번역"
     }
   ],
   "phrases": [
     {
       "phrase": "日本語フレーズ",
+      "phraseReading": "ひらがな読み",
+      "phraseRomanization": "romaji reading",
       "translation": "한국어 번역",
       "scene": "한국어 장면 설명"
     }

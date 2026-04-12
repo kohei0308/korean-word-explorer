@@ -1,6 +1,7 @@
 import type { Conjugation } from '../../types/word';
 import type { TranslationKey } from '../../i18n/translations';
 import { useLang } from '../../i18n/LanguageContext';
+import SpeakButton from '../SpeakButton';
 
 interface ConjugationTabProps {
   data: Conjugation;
@@ -42,6 +43,7 @@ const categoryColors: Record<string, string> = {
 export default function ConjugationTab({ data }: ConjugationTabProps) {
   const { t, lang } = useLang();
   const rows = lang === 'ko' ? jaRows : koRows;
+  const speechLang = lang === 'ko' ? 'ja-JP' : 'ko-KR';
 
   return (
     <div className="space-y-2">
@@ -57,6 +59,7 @@ export default function ConjugationTab({ data }: ConjugationTabProps) {
             <span className="text-stone-800 font-medium text-base flex-1 text-right">
               {value}
             </span>
+            <SpeakButton text={value} speechLang={speechLang} />
           </div>
         );
       })}

@@ -30,6 +30,12 @@ export default function PhrasesTab({ data, onCopied }: PhrasesTabProps) {
                   <CopyButton text={item.phrase} onCopied={onCopied} />
                 </div>
               </div>
+              {item.phraseReading && (
+                <p className="text-xs text-stone-400 mt-0.5">{item.phraseReading}</p>
+              )}
+              {item.phraseRomanization && (
+                <p className="text-xs text-stone-400 italic mt-0.5">{item.phraseRomanization}</p>
+              )}
               <p className="text-sm text-stone-600 mt-0.5">{item.translation}</p>
               <p className="text-xs text-rose-400 mt-2 bg-rose-50 inline-block px-2 py-0.5 rounded-md">
                 {item.scene}

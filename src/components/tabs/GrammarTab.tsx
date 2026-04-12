@@ -29,6 +29,12 @@ export default function GrammarTab({ data, onCopied }: GrammarTabProps) {
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-stone-800 text-sm font-medium">{item.example}</p>
+                {item.exampleReading && (
+                  <p className="text-stone-400 text-xs mt-0.5">{item.exampleReading}</p>
+                )}
+                {item.exampleRomanization && (
+                  <p className="text-stone-400 text-xs italic mt-0.5">{item.exampleRomanization}</p>
+                )}
                 <p className="text-stone-500 text-xs mt-1">{item.translation}</p>
               </div>
               <div className="flex items-center gap-0.5 flex-shrink-0">
