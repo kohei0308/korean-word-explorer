@@ -65,6 +65,18 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkoutStatus = params.get('checkout');
+    if (checkoutStatus === 'success') {
+      showToast(t('checkoutSuccess'));
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (checkoutStatus === 'cancel') {
+      showToast(t('checkoutCancel'));
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };

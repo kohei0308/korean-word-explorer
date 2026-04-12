@@ -1,5 +1,7 @@
-import { X, Crown, Check } from 'lucide-react';
+import { useState } from 'react';
+import { X, Crown, Check, Loader2 } from 'lucide-react';
 import { useLang } from '../i18n/LanguageContext';
+import { supabase } from '../lib/supabase';
 
 interface UpgradeModalProps {
   open: boolean;
@@ -8,8 +10,53 @@ interface UpgradeModalProps {
 
 export default function UpgradeModal({ open, onClose }: UpgradeModalProps) {
   const { t } = useLang();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const benefits = [t('upgradeBenefit1'), t('upgradeBenefit2'), t('upgradeBenefit3')];
+
+  const handleUpgrade = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError(t('upgradeLoginRequired'));
+        setLoading(false);
+        return;
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': anonKey,
+        },
+        body: JSON.stringify({
+          successUrl: window.location.origin,
+          cancelUrl: window.location.origin,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.url) {
+        setError(data.error || t('upgradeError'));
+        setLoading(false);
+        return;
+      }
+
+      window.location.href = data.url;
+    } catch {
+      setError(t('upgradeError'));
+      setLoading(false);
+    }
+  };
 
   if (!open) return null;
 
@@ -47,8 +94,19 @@ export default function UpgradeModal({ open, onClose }: UpgradeModalProps) {
           </ul>
         </div>
 
-        <button className="w-full py-3.5 bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-500 hover:to-rose-500 text-white font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-amber-200/50 hover:shadow-amber-300/50">
-          {t('upgradeButton')}
+        {error && (
+          <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-600 text-center">
+            {error}
+          </div>
+        )}
+
+        <button
+          onClick={handleUpgrade}
+          disabled={loading}
+          className="w-full py-3.5 bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-500 hover:to-rose-500 text-white font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-amber-200/50 hover:shadow-amber-300/50 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+          {loading ? t('upgradeLoading') : t('upgradeButton')}
         </button>
         <p className="text-center text-xs text-stone-400 mt-3">
           {t('upgradeCancel')}
