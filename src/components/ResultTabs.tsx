@@ -33,21 +33,35 @@ const tabDefs: TabDef[] = [
   { id: 'related', labelKey: 'tabRelated', icon: <Link2 className="w-4 h-4" />, premium: true },
 ];
 
+function PremiumLock({ onUpgradeClick }: { onUpgradeClick: () => void }) {
+  const { t } = useLang();
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center mb-4">
+        <Lock className="w-6 h-6 text-stone-400" />
+      </div>
+      <p className="text-stone-500 text-sm mb-4">{t('premiumLockMessage')}</p>
+      <button
+        onClick={onUpgradeClick}
+        className="px-5 py-2.5 bg-rose-400 hover:bg-rose-500 text-white rounded-xl text-sm font-medium transition-colors duration-200"
+      >
+        {t('upgradeFromError')}
+      </button>
+    </div>
+  );
+}
+
 export default function ResultTabs({ result, isPremium, onUpgradeClick, onCopied }: ResultTabsProps) {
   const [activeTab, setActiveTab] = useState('basic');
   const { t } = useLang();
 
   const handleTabClick = (tab: TabDef) => {
-    if (tab.premium && !isPremium) {
-      onUpgradeClick();
-      return;
-    }
     setActiveTab(tab.id);
   };
 
   return (
     <div className="w-full max-w-xl mx-auto mt-6">
-      <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide mb-4 px-1">
+      <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide mb-4 px-1 flex-nowrap">
         {tabDefs.map((tab) => {
           const isActive = activeTab === tab.id;
           const isLocked = tab.premium && !isPremium;
@@ -55,7 +69,7 @@ export default function ResultTabs({ result, isPremium, onUpgradeClick, onCopied
             <button
               key={tab.id}
               onClick={() => handleTabClick(tab)}
-              className={`relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 ${
+              className={`relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium whitespace-nowrap flex-shrink-0 transition-all duration-200 ${
                 isActive
                   ? 'bg-white shadow-sm text-stone-800 border border-stone-200/80'
                   : isLocked
@@ -78,8 +92,12 @@ export default function ResultTabs({ result, isPremium, onUpgradeClick, onCopied
         {activeTab === 'conjugation' && <ConjugationTab data={result.conjugation} />}
         {activeTab === 'grammar' && <GrammarTab data={result.grammar} onCopied={onCopied} />}
         {activeTab === 'phrases' && <PhrasesTab data={result.phrases} onCopied={onCopied} />}
-        {activeTab === 'culture' && isPremium && <CultureTab data={result.culture} />}
-        {activeTab === 'related' && isPremium && <RelatedTab data={result.related} />}
+        {activeTab === 'culture' && (
+          isPremium ? <CultureTab data={result.culture} /> : <PremiumLock onUpgradeClick={onUpgradeClick} />
+        )}
+        {activeTab === 'related' && (
+          isPremium ? <RelatedTab data={result.related} /> : <PremiumLock onUpgradeClick={onUpgradeClick} />
+        )}
       </div>
     </div>
   );
