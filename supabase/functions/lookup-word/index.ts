@@ -110,7 +110,11 @@ STEP 2 – Generate a complete Korean word dictionary entry. ALL of the followin
 - "phrases[].phrase" = Korean
 - "phrases[].phraseRomanization" = romanized Korean reading of the phrase (e.g. tteugeowoyo)
 - "phrases[].translation" and "phrases[].scene" = 日本語
-- "culture.note" = 日本語 (about 200 chars)
+- "culture.note" = 日本語 (about 200 chars, 文化的な背景やニュアンスの概要)
+- "culture.nativeExpressions" = array of 3 objects: ネイティブがよく使うリアルな表現・スラング。各オブジェクトは { "expression": "韓国語表現", "meaning": "日本語の意味", "usage": "日本語でどんな場面で使うか" }
+- "culture.commonMistakes" = array of 2 objects: 日本人が間違いやすいポイント。各オブジェクトは { "mistake": "日本人がよくする間違い（日本語）", "correction": "正しい表現や使い方（日本語）", "explanation": "なぜ間違いやすいかの解説（日本語）" }
+- "culture.conversations" = array of 2-3 objects: 実際の会話例。各オブジェクトは { "situation": "場面説明（日本語）", "lines": ["韓国語のセリフ1", "韓国語のセリフ2", ...], "translation": ["日本語訳1", "日本語訳2", ...] }
+- "culture.pronunciationTips" = array of 2 strings: 発音のコツ（日本語で記述）
 - "related[].word" = Korean (Hangul)
 - "related[].meaning" and "related[].relation" = 日本語（関係性：類義語/対義語/関連語）
 
@@ -151,7 +155,17 @@ Return this JSON:
     }
   ],
   "culture": {
-    "note": "日本語で200文字程度の文化・ニュアンス説明"
+    "note": "日本語で200文字程度の文化・ニュアンス説明",
+    "nativeExpressions": [
+      { "expression": "韓国語のリアル表現", "meaning": "日本語の意味", "usage": "使用場面（日本語）" }
+    ],
+    "commonMistakes": [
+      { "mistake": "よくある間違い", "correction": "正しい表現", "explanation": "解説" }
+    ],
+    "conversations": [
+      { "situation": "場面（日本語）", "lines": ["韓国語セリフ1", "韓国語セリフ2"], "translation": ["日本語訳1", "日本語訳2"] }
+    ],
+    "pronunciationTips": ["発音のコツ1（日本語）", "発音のコツ2（日本語）"]
   },
   "related": [
     {
@@ -190,6 +204,10 @@ STEP 2 – Generate a complete Japanese word dictionary entry. ALL of the follow
 - "phrases[].phraseRomanization" = romanized Japanese reading of the phrase (e.g. atarashii desu)
 - "phrases[].translation" and "phrases[].scene" = 한국어
 - "culture.note" = 한국어 (약 200자의 문화·뉘앙스 설명)
+- "culture.nativeExpressions" = array of 3 objects: 원어민이 자주 쓰는 리얼한 표현·슬랭. 각 오브젝트는 { "expression": "일본어 표현", "meaning": "한국어 뜻", "usage": "사용 장면 (한국어)" }
+- "culture.commonMistakes" = array of 2 objects: 한국인이 틀리기 쉬운 포인트. 각 오브젝트는 { "mistake": "자주 하는 실수 (한국어)", "correction": "올바른 표현 (한국어)", "explanation": "왜 틀리기 쉬운지 해설 (한국어)" }
+- "culture.conversations" = array of 2-3 objects: 실제 회화 예시. 각 오브젝트는 { "situation": "장면 설명 (한국어)", "lines": ["일본어 대사1", "일본어 대사2", ...], "translation": ["한국어 번역1", "한국어 번역2", ...] }
+- "culture.pronunciationTips" = array of 2 strings: 발음 팁 (한국어로 기술)
 - "related[].word" = Japanese (kanji/hiragana)
 - "related[].meaning" and "related[].relation" = 한국어 (관계: 유의어/반의어/관련어)
 
@@ -232,7 +250,17 @@ Return this JSON:
     }
   ],
   "culture": {
-    "note": "한국어로 200자 정도의 문화·뉘앙스 설명"
+    "note": "한국어로 200자 정도의 문화·뉘앙스 설명",
+    "nativeExpressions": [
+      { "expression": "일본어 리얼 표현", "meaning": "한국어 뜻", "usage": "사용 장면 (한국어)" }
+    ],
+    "commonMistakes": [
+      { "mistake": "자주 하는 실수", "correction": "올바른 표현", "explanation": "해설" }
+    ],
+    "conversations": [
+      { "situation": "장면 (한국어)", "lines": ["일본어 대사1", "일본어 대사2"], "translation": ["한국어 번역1", "한국어 번역2"] }
+    ],
+    "pronunciationTips": ["발음 팁1 (한국어)", "발음 팁2 (한국어)"]
   },
   "related": [
     {
@@ -408,7 +436,7 @@ Deno.serve(async (req: Request) => {
 
     const requestBody = JSON.stringify({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 2000,
+      max_tokens: 3000,
       messages: [{ role: "user", content: prompt }],
     });
 

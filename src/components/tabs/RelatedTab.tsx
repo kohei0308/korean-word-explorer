@@ -1,6 +1,7 @@
 import { ArrowRight } from 'lucide-react';
 import type { RelatedWord } from '../../types/word';
 import { useLang } from '../../i18n/LanguageContext';
+import SpeakButton from '../SpeakButton';
 
 interface RelatedTabProps {
   data: RelatedWord[];
@@ -16,7 +17,8 @@ const relationColors: Record<string, string> = {
 };
 
 export default function RelatedTab({ data }: RelatedTabProps) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const speechLang = lang === 'ja' ? 'ko-KR' : 'ja-JP';
 
   return (
     <div className="space-y-2.5">
@@ -27,6 +29,7 @@ export default function RelatedTab({ data }: RelatedTabProps) {
             {item.relation}
           </span>
           <span className="font-bold text-stone-800">{item.word}</span>
+          <SpeakButton text={item.word} speechLang={speechLang} />
           <ArrowRight className="w-3.5 h-3.5 text-stone-300" />
           <span className="text-sm text-stone-500 flex-1">{item.meaning}</span>
         </div>

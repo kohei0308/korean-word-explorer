@@ -41,8 +41,18 @@ export interface Phrase {
   scene: string;
 }
 
+export interface CultureConversation {
+  situation: string;
+  lines: string[];
+  translation: string[];
+}
+
 export interface CultureNote {
   note: string;
+  nativeExpressions?: { expression: string; meaning: string; usage: string }[];
+  commonMistakes?: { mistake: string; correction: string; explanation: string }[];
+  conversations?: CultureConversation[];
+  pronunciationTips?: string[];
 }
 
 export interface RelatedWord {
