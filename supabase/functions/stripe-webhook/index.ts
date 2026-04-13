@@ -16,6 +16,56 @@ function jsonResponse(data: unknown, status = 200) {
   });
 }
 
+function extractSubscriptionId(
+  value: string | Stripe.Subscription | null | undefined,
+): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && "id" in value) return value.id;
+  return null;
+}
+
+function extractCustomerId(
+  value: string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined,
+): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && "id" in value) return value.id;
+  return null;
+}
+
+async function resolveUserId(
+  supabase: ReturnType<typeof createClient>,
+  metadata: Record<string, string> | null | undefined,
+  customerEmail: string | null | undefined,
+): Promise<string | null> {
+  const fromMeta = metadata?.supabase_user_id;
+  if (fromMeta) return fromMeta;
+
+  if (customerEmail) {
+    console.log(
+      `[stripe-webhook] No user_id in metadata, falling back to email lookup: ${customerEmail}`,
+    );
+    const { data: users, error } = await supabase.auth.admin.listUsers();
+    if (error) {
+      console.error("[stripe-webhook] listUsers error:", error);
+      return null;
+    }
+    const match = users.users.find(
+      (u) => u.email?.toLowerCase() === customerEmail.toLowerCase(),
+    );
+    if (match) {
+      console.log(`[stripe-webhook] Found user by email: ${match.id}`);
+      return match.id;
+    }
+    console.warn(
+      `[stripe-webhook] No user found for email: ${customerEmail}`,
+    );
+  }
+
+  return null;
+}
+
 async function upsertSubscription(
   supabase: ReturnType<typeof createClient>,
   userId: string,
@@ -25,6 +75,15 @@ async function upsertSubscription(
   currentPeriodEnd: Date,
   planInterval: string,
 ) {
+  console.log("[stripe-webhook] Upserting subscription:", {
+    userId,
+    customerId,
+    subscriptionId,
+    status,
+    currentPeriodEnd: currentPeriodEnd.toISOString(),
+    planInterval,
+  });
+
   const { error } = await supabase
     .from("subscriptions")
     .upsert(
@@ -41,7 +100,9 @@ async function upsertSubscription(
     );
 
   if (error) {
-    console.error("Subscription upsert error:", error);
+    console.error("[stripe-webhook] Subscription upsert error:", error);
+  } else {
+    console.log("[stripe-webhook] Subscription upserted successfully");
   }
 }
 
@@ -57,6 +118,8 @@ function detectPlanInterval(subscription: Stripe.Subscription): string {
   return "month";
 }
 
+const cryptoProvider = Stripe.createSubtleCryptoProvider();
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -68,6 +131,7 @@ Deno.serve(async (req: Request) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!stripeKey || !supabaseUrl || !serviceKey) {
+      console.error("[stripe-webhook] Missing env vars");
       return jsonResponse({ error: "Server configuration error." }, 500);
     }
 
@@ -87,9 +151,14 @@ Deno.serve(async (req: Request) => {
             body,
             signature,
             webhookSecret,
+            undefined,
+            cryptoProvider,
           );
         } catch (err) {
-          console.error("Webhook signature verification failed:", err);
+          console.error(
+            "[stripe-webhook] Signature verification failed:",
+            err,
+          );
           return jsonResponse({ error: "Invalid signature." }, 400);
         }
       } else {
@@ -99,40 +168,109 @@ Deno.serve(async (req: Request) => {
       event = JSON.parse(body) as Stripe.Event;
     }
 
+    console.log(`[stripe-webhook] Processing event: ${event.type} (${event.id})`);
+
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        const userId = session.metadata?.supabase_user_id;
-        const subscriptionId = session.subscription as string;
+        const subscriptionId = extractSubscriptionId(session.subscription);
+        const customerId = extractCustomerId(session.customer);
 
-        if (userId && subscriptionId) {
-          const subscription =
-            await stripe.subscriptions.retrieve(subscriptionId);
-          const planInterval = session.metadata?.plan_interval ||
-            detectPlanInterval(subscription);
-          await upsertSubscription(
-            supabase,
-            userId,
-            session.customer as string,
-            subscriptionId,
-            subscription.status,
-            new Date(subscription.current_period_end * 1000),
-            planInterval,
-          );
+        console.log("[stripe-webhook] checkout.session.completed:", {
+          sessionId: session.id,
+          subscriptionId,
+          customerId,
+          metadata: session.metadata,
+          customerEmail: session.customer_email || session.customer_details?.email,
+        });
+
+        if (!subscriptionId) {
+          console.warn("[stripe-webhook] No subscription ID in session, skipping");
+          break;
         }
+
+        const subscription =
+          await stripe.subscriptions.retrieve(subscriptionId);
+
+        const userId = await resolveUserId(
+          supabase,
+          session.metadata,
+          session.customer_email ||
+            session.customer_details?.email,
+        );
+
+        if (!userId) {
+          console.error(
+            "[stripe-webhook] Could not resolve user ID for session:",
+            session.id,
+          );
+          break;
+        }
+
+        if (subscription.metadata && !subscription.metadata.supabase_user_id) {
+          await stripe.subscriptions.update(subscriptionId, {
+            metadata: {
+              ...subscription.metadata,
+              supabase_user_id: userId,
+            },
+          });
+        }
+
+        const planInterval = session.metadata?.plan_interval ||
+          detectPlanInterval(subscription);
+
+        await upsertSubscription(
+          supabase,
+          userId,
+          customerId || (subscription.customer as string),
+          subscriptionId,
+          subscription.status,
+          new Date(subscription.current_period_end * 1000),
+          planInterval,
+        );
         break;
       }
 
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
-        const userId = subscription.metadata?.supabase_user_id;
+        const customerId = extractCustomerId(subscription.customer);
+
+        const userId = await resolveUserId(
+          supabase,
+          subscription.metadata,
+          null,
+        );
+
+        if (!userId && customerId) {
+          const customer = await stripe.customers.retrieve(customerId);
+          if (customer && !("deleted" in customer && customer.deleted)) {
+            const resolved = await resolveUserId(
+              supabase,
+              null,
+              customer.email,
+            );
+            if (resolved) {
+              const planInterval = detectPlanInterval(subscription);
+              await upsertSubscription(
+                supabase,
+                resolved,
+                customerId,
+                subscription.id,
+                subscription.status,
+                new Date(subscription.current_period_end * 1000),
+                planInterval,
+              );
+            }
+          }
+          break;
+        }
 
         if (userId) {
           const planInterval = detectPlanInterval(subscription);
           await upsertSubscription(
             supabase,
             userId,
-            subscription.customer as string,
+            customerId || "",
             subscription.id,
             subscription.status,
             new Date(subscription.current_period_end * 1000),
@@ -144,14 +282,44 @@ Deno.serve(async (req: Request) => {
 
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
-        const userId = subscription.metadata?.supabase_user_id;
+        const customerId = extractCustomerId(subscription.customer);
+
+        const userId = await resolveUserId(
+          supabase,
+          subscription.metadata,
+          null,
+        );
+
+        if (!userId && customerId) {
+          const customer = await stripe.customers.retrieve(customerId);
+          if (customer && !("deleted" in customer && customer.deleted)) {
+            const resolved = await resolveUserId(
+              supabase,
+              null,
+              customer.email,
+            );
+            if (resolved) {
+              const planInterval = detectPlanInterval(subscription);
+              await upsertSubscription(
+                supabase,
+                resolved,
+                customerId,
+                subscription.id,
+                "canceled",
+                new Date(subscription.current_period_end * 1000),
+                planInterval,
+              );
+            }
+          }
+          break;
+        }
 
         if (userId) {
           const planInterval = detectPlanInterval(subscription);
           await upsertSubscription(
             supabase,
             userId,
-            subscription.customer as string,
+            customerId || "",
             subscription.id,
             "canceled",
             new Date(subscription.current_period_end * 1000),
@@ -163,19 +331,32 @@ Deno.serve(async (req: Request) => {
 
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        const subscriptionId = invoice.subscription as string;
+        const subscriptionId = extractSubscriptionId(invoice.subscription);
 
         if (subscriptionId) {
           const subscription =
             await stripe.subscriptions.retrieve(subscriptionId);
-          const userId = subscription.metadata?.supabase_user_id;
+          const customerId = extractCustomerId(subscription.customer);
+
+          let userId = await resolveUserId(
+            supabase,
+            subscription.metadata,
+            null,
+          );
+
+          if (!userId && customerId) {
+            const customer = await stripe.customers.retrieve(customerId);
+            if (customer && !("deleted" in customer && customer.deleted)) {
+              userId = await resolveUserId(supabase, null, customer.email);
+            }
+          }
 
           if (userId) {
             const planInterval = detectPlanInterval(subscription);
             await upsertSubscription(
               supabase,
               userId,
-              subscription.customer as string,
+              customerId || "",
               subscriptionId,
               "past_due",
               new Date(subscription.current_period_end * 1000),
@@ -187,12 +368,12 @@ Deno.serve(async (req: Request) => {
       }
 
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        console.log(`[stripe-webhook] Unhandled event type: ${event.type}`);
     }
 
     return jsonResponse({ received: true });
   } catch (err) {
-    console.error("Webhook handler error:", err);
+    console.error("[stripe-webhook] Webhook handler error:", err);
     return jsonResponse({ error: "Webhook processing failed." }, 500);
   }
 });
