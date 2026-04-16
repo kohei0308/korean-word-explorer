@@ -45,7 +45,7 @@ export function useWordLookup() {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ word: word.trim(), lang, clientIp: 'browser' }),
+        body: JSON.stringify({ word: word.trim(), lang }),
       });
 
       if (!response.ok && response.headers.get('content-type')?.includes('text/html')) {

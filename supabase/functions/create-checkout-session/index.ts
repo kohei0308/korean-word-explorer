@@ -2,17 +2,27 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import Stripe from "npm:stripe@17.7.0";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers":
-    "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+function getAllowedOrigin(req: Request): string {
+  const allowedRaw = Deno.env.get("ALLOWED_ORIGINS") || "";
+  const allowedList = allowedRaw.split(",").map((o) => o.trim()).filter(Boolean);
+  const origin = req.headers.get("Origin") || "";
+  if (allowedList.includes(origin)) return origin;
+  return allowedList[0] || "";
+}
 
-function jsonResponse(data: unknown, status = 200) {
+function corsHeaders(req: Request) {
+  return {
+    "Access-Control-Allow-Origin": getAllowedOrigin(req),
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, X-Client-Info, Apikey",
+  };
+}
+
+function jsonResponse(req: Request, data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
   });
 }
 
@@ -36,7 +46,7 @@ const PLANS = {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 200, headers: corsHeaders });
+    return new Response(null, { status: 200, headers: corsHeaders(req) });
   }
 
   try {
@@ -46,12 +56,12 @@ Deno.serve(async (req: Request) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!stripeKey || !supabaseUrl || !anonKey || !serviceKey) {
-      return jsonResponse({ error: "Server configuration error." }, 500);
+      return jsonResponse(req, { error: "Server configuration error." }, 500);
     }
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return jsonResponse({ error: "Authentication required." }, 401);
+      return jsonResponse(req, { error: "Authentication required." }, 401);
     }
 
     const userClient = createClient(supabaseUrl, anonKey, {
@@ -63,7 +73,7 @@ Deno.serve(async (req: Request) => {
     } = await userClient.auth.getUser();
 
     if (authError || !user) {
-      return jsonResponse({ error: "Invalid authentication." }, 401);
+      return jsonResponse(req, { error: "Invalid authentication." }, 401);
     }
 
     let body: Record<string, unknown> = {};
@@ -79,14 +89,9 @@ Deno.serve(async (req: Request) => {
         : "month";
     const plan = PLANS[interval];
 
-    const successUrl =
-      typeof body.successUrl === "string"
-        ? body.successUrl
-        : `${req.headers.get("origin") || supabaseUrl}`;
-    const cancelUrl =
-      typeof body.cancelUrl === "string"
-        ? body.cancelUrl
-        : `${req.headers.get("origin") || supabaseUrl}`;
+    const appUrl = Deno.env.get("APP_URL") || getAllowedOrigin(req) || supabaseUrl;
+    const successUrl = `${appUrl}?checkout=success`;
+    const cancelUrl = `${appUrl}?checkout=cancel`;
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2024-12-18.acacia" });
     const supabase = createClient(supabaseUrl, serviceKey);
@@ -124,8 +129,8 @@ Deno.serve(async (req: Request) => {
           quantity: 1,
         },
       ],
-      success_url: `${successUrl}?checkout=success`,
-      cancel_url: `${cancelUrl}?checkout=cancel`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       subscription_data: {
         metadata: {
           supabase_user_id: user.id,
@@ -138,10 +143,10 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    return jsonResponse({ url: session.url });
+    return jsonResponse(req, { url: session.url });
   } catch (err) {
     console.error("Checkout session error:", err);
-    return jsonResponse(
+    return jsonResponse(req, 
       { error: "Failed to create checkout session." },
       500,
     );

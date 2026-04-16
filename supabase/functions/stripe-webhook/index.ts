@@ -3,8 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import Stripe from "npm:stripe@17.7.0";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Origin": "",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
@@ -34,6 +34,10 @@ function extractCustomerId(
   return null;
 }
 
+function maskEmail(email: string): string {
+  return email.replace(/^(.{2}).*@/, "$1***@");
+}
+
 async function resolveUserId(
   supabase: ReturnType<typeof createClient>,
   metadata: Record<string, string> | null | undefined,
@@ -44,7 +48,7 @@ async function resolveUserId(
 
   if (customerEmail) {
     console.log(
-      `[stripe-webhook] No user_id in metadata, falling back to email lookup: ${customerEmail}`,
+      `[stripe-webhook] No user_id in metadata, falling back to email lookup: ${maskEmail(customerEmail)}`,
     );
     const { data: users, error } = await supabase.auth.admin.listUsers();
     if (error) {
@@ -55,11 +59,11 @@ async function resolveUserId(
       (u) => u.email?.toLowerCase() === customerEmail.toLowerCase(),
     );
     if (match) {
-      console.log(`[stripe-webhook] Found user by email: ${match.id}`);
+      console.log(`[stripe-webhook] Found user by email: ${maskEmail(customerEmail)}`);
       return match.id;
     }
     console.warn(
-      `[stripe-webhook] No user found for email: ${customerEmail}`,
+      `[stripe-webhook] No user found for email: ${maskEmail(customerEmail)}`,
     );
   }
 
@@ -138,34 +142,32 @@ Deno.serve(async (req: Request) => {
     const stripe = new Stripe(stripeKey, { apiVersion: "2024-12-18.acacia" });
     const supabase = createClient(supabaseUrl, serviceKey);
 
+    const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+    if (!webhookSecret) {
+      console.error("[stripe-webhook] STRIPE_WEBHOOK_SECRET is not set");
+      return jsonResponse({ error: "Server configuration error." }, 500);
+    }
+
     const body = await req.text();
     const signature = req.headers.get("stripe-signature");
 
-    let event: Stripe.Event;
+    if (!signature) {
+      console.error("[stripe-webhook] Missing stripe-signature header");
+      return jsonResponse({ error: "Missing signature." }, 400);
+    }
 
-    if (signature) {
-      const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
-      if (webhookSecret) {
-        try {
-          event = await stripe.webhooks.constructEventAsync(
-            body,
-            signature,
-            webhookSecret,
-            undefined,
-            cryptoProvider,
-          );
-        } catch (err) {
-          console.error(
-            "[stripe-webhook] Signature verification failed:",
-            err,
-          );
-          return jsonResponse({ error: "Invalid signature." }, 400);
-        }
-      } else {
-        event = JSON.parse(body) as Stripe.Event;
-      }
-    } else {
-      event = JSON.parse(body) as Stripe.Event;
+    let event: Stripe.Event;
+    try {
+      event = await stripe.webhooks.constructEventAsync(
+        body,
+        signature,
+        webhookSecret,
+        undefined,
+        cryptoProvider,
+      );
+    } catch (err) {
+      console.error("[stripe-webhook] Signature verification failed:", err);
+      return jsonResponse({ error: "Invalid signature." }, 400);
     }
 
     console.log(`[stripe-webhook] Processing event: ${event.type} (${event.id})`);
