@@ -32,45 +32,15 @@ async function incrementUsage(
   today: string,
 ) {
   if (userId) {
-    const { data: usage } = await supabase
-      .from("daily_usage")
-      .select("search_count")
-      .eq("user_id", userId)
-      .eq("search_date", today)
-      .maybeSingle();
-
-    if (usage) {
-      await supabase
-        .from("daily_usage")
-        .update({ search_count: usage.search_count + 1 })
-        .eq("user_id", userId)
-        .eq("search_date", today);
-    } else {
-      await supabase
-        .from("daily_usage")
-        .insert({ user_id: userId, search_date: today, search_count: 1 });
-    }
+    await supabase.rpc("increment_daily_usage_auth", {
+      p_user_id: userId,
+      p_search_date: today,
+    });
   } else {
-    const { data: usage } = await supabase
-      .from("daily_usage")
-      .select("search_count")
-      .eq("user_ip", ip)
-      .eq("search_date", today)
-      .is("user_id", null)
-      .maybeSingle();
-
-    if (usage) {
-      await supabase
-        .from("daily_usage")
-        .update({ search_count: usage.search_count + 1 })
-        .eq("user_ip", ip)
-        .eq("search_date", today)
-        .is("user_id", null);
-    } else {
-      await supabase
-        .from("daily_usage")
-        .insert({ user_ip: ip, search_date: today, search_count: 1 });
-    }
+    await supabase.rpc("increment_daily_usage_anon", {
+      p_user_ip: ip,
+      p_search_date: today,
+    });
   }
 }
 
@@ -335,8 +305,8 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(req, { error: "入力が長すぎます。50文字以内で入力してください。" }, 400);
     }
 
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-      || req.headers.get("cf-connecting-ip")
+    const ip = req.headers.get("cf-connecting-ip")
+      || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
       || "unknown";
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);

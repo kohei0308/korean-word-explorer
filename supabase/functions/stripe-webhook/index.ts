@@ -50,17 +50,23 @@ async function resolveUserId(
     console.log(
       `[stripe-webhook] No user_id in metadata, falling back to email lookup: ${maskEmail(customerEmail)}`,
     );
-    const { data: users, error } = await supabase.auth.admin.listUsers();
-    if (error) {
-      console.error("[stripe-webhook] listUsers error:", error);
-      return null;
-    }
-    const match = users.users.find(
-      (u) => u.email?.toLowerCase() === customerEmail.toLowerCase(),
-    );
-    if (match) {
-      console.log(`[stripe-webhook] Found user by email: ${maskEmail(customerEmail)}`);
-      return match.id;
+    let page = 1;
+    const perPage = 1000;
+    while (true) {
+      const { data: users, error } = await supabase.auth.admin.listUsers({ page, perPage });
+      if (error) {
+        console.error("[stripe-webhook] listUsers error:", error);
+        return null;
+      }
+      const match = users.users.find(
+        (u) => u.email?.toLowerCase() === customerEmail.toLowerCase(),
+      );
+      if (match) {
+        console.log(`[stripe-webhook] Found user by email: ${maskEmail(customerEmail)}`);
+        return match.id;
+      }
+      if (users.users.length < perPage) break;
+      page++;
     }
     console.warn(
       `[stripe-webhook] No user found for email: ${maskEmail(customerEmail)}`,
