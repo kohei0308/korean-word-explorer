@@ -1,6 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import Stripe from "npm:stripe@17.7.0";
+import { checkRateLimit, rateLimitHeaders } from "../_shared/rateLimiter.ts";
+import { preCheckJwt } from "../_shared/jwtUtils.ts";
 
 function getAllowedOrigin(req: Request): string {
   const allowedRaw = Deno.env.get("ALLOWED_ORIGINS") || "";
@@ -16,6 +18,7 @@ function corsHeaders(req: Request) {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers":
       "Content-Type, Authorization, X-Client-Info, Apikey",
+    "Vary": "Origin",
   };
 }
 
@@ -32,6 +35,25 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const ip = req.headers.get("cf-connecting-ip")
+      || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+      || "unknown";
+
+    const rlResult = await checkRateLimit("manage-subscription", ip);
+    if (!rlResult.allowed) {
+      return new Response(
+        JSON.stringify({ error: "Too many requests. Please try again later." }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders(req),
+            "Content-Type": "application/json",
+            ...rateLimitHeaders(rlResult),
+          },
+        },
+      );
+    }
+
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
@@ -44,6 +66,12 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return jsonResponse(req, { error: "Authentication required." }, 401);
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const preCheck = preCheckJwt(token, supabaseUrl);
+    if (!preCheck.valid) {
+      return jsonResponse(req, { error: "Invalid authentication." }, 401);
     }
 
     const userClient = createClient(supabaseUrl, anonKey, {

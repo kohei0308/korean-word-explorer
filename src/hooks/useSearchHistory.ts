@@ -25,7 +25,7 @@ export function useSearchHistory(userId: string | null) {
       }
     } else {
       try {
-        const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+        const raw = sessionStorage.getItem(LOCAL_STORAGE_KEY);
         if (raw) {
           setHistory(JSON.parse(raw));
         }
@@ -43,10 +43,9 @@ export function useSearchHistory(userId: string | null) {
     const entry: HistoryEntry = { word, searched_at: new Date().toISOString() };
 
     if (userId) {
-      await supabase.from('search_history').insert({
-        user_id: userId,
-        word,
-      });
+      // Remove existing entry for same word, then re-insert to move it to top
+      await supabase.from('search_history').delete().eq('user_id', userId).eq('word', word);
+      await supabase.from('search_history').insert({ user_id: userId, word });
       setHistory((prev) => {
         const filtered = prev.filter((h) => h.word !== word);
         return [entry, ...filtered].slice(0, LOCAL_MAX);
@@ -56,7 +55,7 @@ export function useSearchHistory(userId: string | null) {
         const filtered = prev.filter((h) => h.word !== word);
         const next = [entry, ...filtered].slice(0, LOCAL_MAX);
         try {
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
+          sessionStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
         } catch {
           // storage full
         }
@@ -69,7 +68,7 @@ export function useSearchHistory(userId: string | null) {
     if (userId) {
       await supabase.from('search_history').delete().eq('user_id', userId);
     } else {
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      sessionStorage.removeItem(LOCAL_STORAGE_KEY);
     }
     setHistory([]);
   }, [userId]);

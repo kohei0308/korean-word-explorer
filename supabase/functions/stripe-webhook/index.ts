@@ -2,17 +2,10 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import Stripe from "npm:stripe@17.7.0";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers":
-    "Content-Type, Authorization, X-Client-Info, Apikey",
-};
-
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -50,23 +43,16 @@ async function resolveUserId(
     console.log(
       `[stripe-webhook] No user_id in metadata, falling back to email lookup: ${maskEmail(customerEmail)}`,
     );
-    let page = 1;
-    const perPage = 1000;
-    while (true) {
-      const { data: users, error } = await supabase.auth.admin.listUsers({ page, perPage });
-      if (error) {
-        console.error("[stripe-webhook] listUsers error:", error);
-        return null;
-      }
-      const match = users.users.find(
-        (u) => u.email?.toLowerCase() === customerEmail.toLowerCase(),
-      );
-      if (match) {
-        console.log(`[stripe-webhook] Found user by email: ${maskEmail(customerEmail)}`);
-        return match.id;
-      }
-      if (users.users.length < perPage) break;
-      page++;
+    const { data: userId, error } = await supabase.rpc("get_user_id_by_email", {
+      p_email: customerEmail,
+    });
+    if (error) {
+      console.error("[stripe-webhook] email lookup error:", error);
+      return null;
+    }
+    if (userId) {
+      console.log(`[stripe-webhook] Found user by email: ${maskEmail(customerEmail)}`);
+      return userId as string;
     }
     console.warn(
       `[stripe-webhook] No user found for email: ${maskEmail(customerEmail)}`,
@@ -131,8 +117,9 @@ function detectPlanInterval(subscription: Stripe.Subscription): string {
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 200, headers: corsHeaders });
+  // Webhook is server-to-server only — reject browser preflight and non-POST
+  if (req.method !== "POST") {
+    return new Response(null, { status: 405 });
   }
 
   try {
@@ -164,6 +151,7 @@ Deno.serve(async (req: Request) => {
 
     let event: Stripe.Event;
     try {
+      // constructEventAsync validates signature AND timestamp (300s tolerance) — replay protection built-in
       event = await stripe.webhooks.constructEventAsync(
         body,
         signature,
@@ -174,6 +162,20 @@ Deno.serve(async (req: Request) => {
     } catch (err) {
       console.error("[stripe-webhook] Signature verification failed:", err);
       return jsonResponse({ error: "Invalid signature." }, 400);
+    }
+
+    // Deduplicate: reject events already processed (covers races within Stripe's replay window)
+    const { error: insertErr } = await supabase
+      .from("stripe_webhook_events")
+      .insert({ event_id: event.id });
+
+    if (insertErr) {
+      if (insertErr.code === "23505") {
+        // Unique violation — already processed
+        console.log(`[stripe-webhook] Duplicate event ignored: ${event.id}`);
+        return jsonResponse({ received: true });
+      }
+      console.error("[stripe-webhook] Event dedup insert error:", insertErr);
     }
 
     console.log(`[stripe-webhook] Processing event: ${event.type} (${event.id})`);
@@ -189,7 +191,7 @@ Deno.serve(async (req: Request) => {
           subscriptionId,
           customerId,
           metadata: session.metadata,
-          customerEmail: session.customer_email || session.customer_details?.email,
+          customerEmail: maskEmail(session.customer_email || session.customer_details?.email || ""),
         });
 
         if (!subscriptionId) {

@@ -1,6 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import Stripe from "npm:stripe@17.7.0";
+import { checkRateLimit, rateLimitHeaders } from "../_shared/rateLimiter.ts";
+import { preCheckJwt } from "../_shared/jwtUtils.ts";
 
 function getAllowedOrigin(req: Request): string {
   const allowedRaw = Deno.env.get("ALLOWED_ORIGINS") || "";
@@ -16,6 +18,7 @@ function corsHeaders(req: Request) {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers":
       "Content-Type, Authorization, X-Client-Info, Apikey",
+    "Vary": "Origin",
   };
 }
 
@@ -50,6 +53,25 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const ip = req.headers.get("cf-connecting-ip")
+      || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+      || "unknown";
+
+    const rlResult = await checkRateLimit("create-checkout-session", ip);
+    if (!rlResult.allowed) {
+      return new Response(
+        JSON.stringify({ error: "Too many requests. Please try again later." }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders(req),
+            "Content-Type": "application/json",
+            ...rateLimitHeaders(rlResult),
+          },
+        },
+      );
+    }
+
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
@@ -62,6 +84,12 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return jsonResponse(req, { error: "Authentication required." }, 401);
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const preCheck = preCheckJwt(token, supabaseUrl);
+    if (!preCheck.valid) {
+      return jsonResponse(req, { error: "Invalid authentication." }, 401);
     }
 
     const userClient = createClient(supabaseUrl, anonKey, {
@@ -89,7 +117,13 @@ Deno.serve(async (req: Request) => {
         : "month";
     const plan = PLANS[interval];
 
-    const appUrl = Deno.env.get("APP_URL") || getAllowedOrigin(req) || supabaseUrl;
+    // #23: Enforce HTTPS for redirect URLs (allow localhost in dev only)
+    const rawAppUrl = Deno.env.get("APP_URL") || getAllowedOrigin(req) || supabaseUrl;
+    if (!rawAppUrl.startsWith("https://") && !rawAppUrl.startsWith("http://localhost")) {
+      console.error("[create-checkout-session] APP_URL must use HTTPS:", rawAppUrl);
+      return jsonResponse(req, { error: "Server configuration error." }, 500);
+    }
+    const appUrl = rawAppUrl;
     const successUrl = `${appUrl}?checkout=success`;
     const cancelUrl = `${appUrl}?checkout=cancel`;
 
@@ -105,6 +139,12 @@ Deno.serve(async (req: Request) => {
     let customerId = existingSub?.stripe_customer_id;
 
     if (!customerId) {
+      // #22: Validate UUID format before embedding in Stripe metadata
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!UUID_RE.test(user.id)) {
+        console.error("[create-checkout-session] Invalid user ID format:", user.id);
+        return jsonResponse(req, { error: "Invalid authentication." }, 401);
+      }
       const customer = await stripe.customers.create({
         email: user.email,
         metadata: { supabase_user_id: user.id },

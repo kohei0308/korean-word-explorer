@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { checkRateLimit, rateLimitHeaders } from "../_shared/rateLimiter.ts";
+import { preCheckJwt } from "../_shared/jwtUtils.ts";
 
 function getAllowedOrigin(req: Request): string {
   const allowedRaw = Deno.env.get("ALLOWED_ORIGINS") || "";
@@ -15,6 +17,7 @@ function corsHeaders(req: Request) {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers":
       "Content-Type, Authorization, X-Client-Info, Apikey",
+    "Vary": "Origin",
   };
 }
 
@@ -25,48 +28,27 @@ function jsonResponse(req: Request, data: unknown, status = 200) {
   });
 }
 
-async function incrementUsage(
+async function checkAndIncrementUsage(
   supabase: ReturnType<typeof createClient>,
   userId: string | null,
   ip: string,
   today: string,
-) {
-  if (userId) {
-    await supabase.rpc("increment_daily_usage_auth", {
-      p_user_id: userId,
-      p_search_date: today,
-    });
-  } else {
-    await supabase.rpc("increment_daily_usage_anon", {
-      p_user_ip: ip,
-      p_search_date: today,
-    });
-  }
-}
-
-async function getUsageCount(
-  supabase: ReturnType<typeof createClient>,
-  userId: string | null,
-  ip: string,
-  today: string,
+  limit: number,
 ): Promise<number> {
   if (userId) {
-    const { data: usage } = await supabase
-      .from("daily_usage")
-      .select("search_count")
-      .eq("user_id", userId)
-      .eq("search_date", today)
-      .maybeSingle();
-    return usage?.search_count ?? 0;
+    const { data } = await supabase.rpc("check_and_increment_usage_auth", {
+      p_user_id: userId,
+      p_search_date: today,
+      p_limit: limit,
+    });
+    return (data as number) ?? -1;
   } else {
-    const { data: usage } = await supabase
-      .from("daily_usage")
-      .select("search_count")
-      .eq("user_ip", ip)
-      .eq("search_date", today)
-      .is("user_id", null)
-      .maybeSingle();
-    return usage?.search_count ?? 0;
+    const { data } = await supabase.rpc("check_and_increment_usage_anon", {
+      p_user_ip: ip,
+      p_search_date: today,
+      p_limit: limit,
+    });
+    return (data as number) ?? -1;
   }
 }
 
@@ -299,15 +281,37 @@ Deno.serve(async (req: Request) => {
     }
 
     const MAX_WORD_LENGTH = 50;
-    const trimmedWord = word.trim().replace(/["\\\n\r\t]/g, "");
+    const trimmedWord = word.trim();
 
     if (trimmedWord.length > MAX_WORD_LENGTH) {
       return jsonResponse(req, { error: "入力が長すぎます。50文字以内で入力してください。" }, 400);
     }
 
+    // Whitelist: Korean, Japanese (hiragana/katakana/kanji), Latin, numbers, space, hyphen, middle dot
+    const VALID_WORD_PATTERN =
+      /^[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3041-\u3096\u30A0-\u30FF\u4E00-\u9FFF\u3400-\u4DBFa-zA-Z0-9\s\-・]+$/;
+    if (!VALID_WORD_PATTERN.test(trimmedWord)) {
+      return jsonResponse(req, { error: "使用できない文字が含まれています。" }, 400);
+    }
+
     const ip = req.headers.get("cf-connecting-ip")
       || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
       || "unknown";
+
+    const rlResult = await checkRateLimit("lookup-word", ip);
+    if (!rlResult.allowed) {
+      return new Response(
+        JSON.stringify({ error: "リクエストが多すぎます。しばらくしてから再試行してください。" }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders(req),
+            "Content-Type": "application/json",
+            ...rateLimitHeaders(rlResult),
+          },
+        },
+      );
+    }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -319,6 +323,14 @@ Deno.serve(async (req: Request) => {
       try {
         const token = authHeader.replace("Bearer ", "");
         if (token !== anonKey) {
+          const preCheck = preCheckJwt(token, supabaseUrl);
+          if (!preCheck.valid) {
+            return jsonResponse(
+              req,
+              { error: "認証トークンが無効です。再ログインしてください。" },
+              401,
+            );
+          }
           const userClient = createClient(supabaseUrl, anonKey, {
             global: { headers: { Authorization: authHeader } },
           });
@@ -333,13 +345,11 @@ Deno.serve(async (req: Request) => {
               .eq("user_id", userId)
               .eq("status", "active")
               .maybeSingle();
-            if (
+            isPremium = !!(
               sub &&
               sub.current_period_end &&
               new Date(sub.current_period_end) > new Date()
-            ) {
-              isPremium = true;
-            }
+            );
           }
         }
       } catch (authErr) {
@@ -355,9 +365,11 @@ Deno.serve(async (req: Request) => {
     const tier = isPremium ? "premium" : userId ? "free" : "guest";
     const effectiveLimit = tier === "premium" ? Infinity : tier === "free" ? FREE_USER_LIMIT : GUEST_LIMIT;
 
+    // Atomically check limit and pre-increment in one DB operation (eliminates TOCTOU race)
+    let usageCount: number | null = null;
     if (tier !== "premium" && !disableLimit) {
-      const currentCount = await getUsageCount(supabase, userId, ip, today);
-      if (currentCount >= effectiveLimit) {
+      const result = await checkAndIncrementUsage(supabase, userId, ip, today, effectiveLimit);
+      if (result === -1) {
         const errorMsg =
           tier === "guest"
             ? lang === "ko"
@@ -366,15 +378,16 @@ Deno.serve(async (req: Request) => {
             : lang === "ko"
               ? "오늘의 무료 검색 횟수(10회)에 도달했습니다. 유료 플랜으로 무제한 검색하세요."
               : "本日の無料検索回数（10回）に達しました。有料プランで無制限に検索できます。";
-        return jsonResponse(req, 
+        return jsonResponse(req,
           {
             error: errorMsg,
             tier,
-            usage: { count: currentCount, limit: effectiveLimit },
+            usage: { count: effectiveLimit, limit: effectiveLimit },
           },
           429,
         );
       }
+      usageCount = result;
     }
 
     const { data: cached, error: cacheErr } = await supabase
@@ -397,25 +410,19 @@ Deno.serve(async (req: Request) => {
         // non-critical
       }
 
-      if (tier !== "premium") {
-        await incrementUsage(supabase, userId, ip, today);
-        const newCount = await getUsageCount(supabase, userId, ip, today);
-        return jsonResponse(req, {
-          data: cached.result,
-          cached: true,
-          isPremium,
-          tier,
-          usage: { count: newCount, limit: effectiveLimit },
-        });
-      }
-
-      return jsonResponse(req, { data: cached.result, cached: true, isPremium, tier });
+      return jsonResponse(req, {
+        data: cached.result,
+        cached: true,
+        isPremium,
+        tier,
+        ...(usageCount !== null ? { usage: { count: usageCount, limit: effectiveLimit } } : {}),
+      });
     }
 
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!anthropicKey) {
-      console.error("ANTHROPIC_API_KEY is not set");
-      return jsonResponse(req, 
+    const openaiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!openaiKey) {
+      console.error("OPENAI_API_KEY is not set");
+      return jsonResponse(req,
         { error: "API設定エラー。管理者にお問い合わせください。" },
         500,
       );
@@ -424,87 +431,73 @@ Deno.serve(async (req: Request) => {
     const prompt = buildPrompt(trimmedWord, lang);
 
     const requestBody = JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 3000,
+      model: "gpt-5.4-mini",
+      max_completion_tokens: 8000,
       messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" },
+      reasoning_effort: "low",
     });
 
     const requestHeaders = {
       "Content-Type": "application/json",
-      "x-api-key": anthropicKey,
-      "anthropic-version": "2023-06-01",
+      "Authorization": `Bearer ${openaiKey}`,
     };
 
     let response: Response;
     try {
-      response = await fetch("https://api.anthropic.com/v1/messages", {
+      response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: requestHeaders,
         body: requestBody,
       });
     } catch (fetchErr) {
-      console.error("Anthropic API fetch failed:", fetchErr);
-      return jsonResponse(req, 
+      console.error("OpenAI API fetch failed:", fetchErr);
+      return jsonResponse(req,
         { error: "AI APIへの接続に失敗しました。" },
         502,
       );
     }
 
-    if (response.status === 529) {
-      await new Promise((r) => setTimeout(r, 2000));
-      try {
-        response = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: requestHeaders,
-          body: requestBody,
-        });
-      } catch (retryErr) {
-        console.error("Anthropic API retry failed:", retryErr);
-        return jsonResponse(req, 
-          { error: "AI APIへの接続に失敗しました。" },
-          502,
-        );
+    // 429 Rate Limit: 指数バックオフで最大3回リトライ
+    if (response.status === 429) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const waitMs = 2000 * Math.pow(2, attempt);
+        await new Promise((r) => setTimeout(r, waitMs));
+        try {
+          response = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: requestHeaders,
+            body: requestBody,
+          });
+          if (response.ok) break;
+        } catch (retryErr) {
+          console.error(`OpenAI API retry ${attempt} failed:`, retryErr);
+        }
       }
     }
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("Anthropic API error status:", response.status);
-      console.error("Anthropic API error body:", errText);
-      return jsonResponse(req, 
-        {
-          error:
-            "AI応答エラーが発生しました。しばらくしてからお試しください。",
-        },
+      console.error("OpenAI API error status:", response.status);
+      console.error("OpenAI API error body:", errText);
+      return jsonResponse(req,
+        { error: "AI応答エラーが発生しました。しばらくしてからお試しください。" },
         502,
       );
     }
 
     const aiResult = await response.json();
-    const textContent = aiResult.content?.[0]?.text || "";
+    const textContent = aiResult.choices?.[0]?.message?.content || "";
 
     let parsed;
     try {
       parsed = JSON.parse(textContent);
     } catch {
-      const jsonMatch = textContent.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          parsed = JSON.parse(jsonMatch[0]);
-        } catch {
-          console.error("JSON extraction parse failed:", jsonMatch[0]);
-          return jsonResponse(req, 
-            { error: "AI応答の解析に失敗しました。" },
-            500,
-          );
-        }
-      } else {
-        console.error("No JSON found in AI response:", textContent);
-        return jsonResponse(req, 
-          { error: "AI応答の解析に失敗しました。" },
-          500,
-        );
-      }
+      console.error("JSON parse failed:", textContent);
+      return jsonResponse(req,
+        { error: "AI応答の解析に失敗しました。" },
+        500,
+      );
     }
 
     const { error: upsertErr } = await supabase
@@ -524,19 +517,13 @@ Deno.serve(async (req: Request) => {
       console.error("Cache upsert error:", upsertErr);
     }
 
-    if (tier !== "premium") {
-      await incrementUsage(supabase, userId, ip, today);
-      const newCount = await getUsageCount(supabase, userId, ip, today);
-      return jsonResponse(req, {
-        data: parsed,
-        cached: false,
-        isPremium,
-        tier,
-        usage: { count: newCount, limit: effectiveLimit },
-      });
-    }
-
-    return jsonResponse(req, { data: parsed, cached: false, isPremium, tier });
+    return jsonResponse(req, {
+      data: parsed,
+      cached: false,
+      isPremium,
+      tier,
+      ...(usageCount !== null ? { usage: { count: usageCount, limit: effectiveLimit } } : {}),
+    });
   } catch (err) {
     console.error("Edge function unhandled error:", err);
     return jsonResponse(req, 
